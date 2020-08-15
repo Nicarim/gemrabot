@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 
 from sources.gitlab import GitlabWebhook
 
-WEBHOOK_URL = "https://hooks.slack.com/services/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"
+WEBHOOK_URL = "NO"
 app = FastAPI()
 
 logger = logging.getLogger("app")
