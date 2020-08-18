@@ -60,9 +60,12 @@ class GitlabWebhook:
         for change in changes['changes']:
             changes_txt: str = change['diff']
             header = f"diff --git a/{change['old_path']} b/{change['new_path']}\n"
-            header += f"index fixme...fixme 100644\n"
-            header += f"--- a/{change['old_path']}\n"
-            header += f"+++ b/{change['new_path']}\n"
+            if change['new_file']:
+                header += f"new file mode {change['b_mode']} \n"
+            header += f"index 0000000..0000000 100644\n"
+            if "Binary files" not in changes_txt:
+                header += f"--- a/{change['old_path']}\n"
+                header += f"+++ b/{change['new_path']}\n"
             all_changes += header
             all_changes += changes_txt
 
