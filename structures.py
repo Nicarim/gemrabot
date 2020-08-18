@@ -1,7 +1,19 @@
 from enum import Enum
-from typing import Any, Optional, List
+from typing import Any, List
 
 from pydantic import BaseModel, AnyHttpUrl
+
+
+class PatchedFileRepr(str):
+    def __init__(self, pf):
+        super().__init__()
+        self.pf = pf
+
+    def __str__(self):
+        return str(self.pf)
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class FileAction(str, Enum):
@@ -19,7 +31,7 @@ class PullRequestStatus(str, Enum):
 class PullRequestFile(BaseModel):
     filename: str
     action: FileAction
-    diff: Optional[str]
+    diff: PatchedFileRepr
 
 
 class PullRequest(BaseModel):

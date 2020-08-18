@@ -3,6 +3,8 @@ import os
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from starlette.responses import JSONResponse
 
 from sources.gitlab import GitlabWebhook
 
@@ -22,7 +24,8 @@ async def webhooks_gitlab(request: Request):
         return
     pull_request = await webhook.parse()
     logger.info("Got pull request")
-    return pull_request.json()
+    json_data = jsonable_encoder(pull_request)
+    return JSONResponse(json_data)
 
 
 if __name__ == "__main__":

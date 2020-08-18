@@ -1,13 +1,14 @@
 import json
 import logging
+from typing import List
 
 from aioify import aioify
 from fastapi import Request
 from gitlab import Gitlab
 from gitlab.v4.objects import Project
-from unidiff import PatchSet
+from unidiff import PatchSet, PatchedFile
 
-from structures import PullRequest, PullRequestStatus
+from structures import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,26 @@ class GitlabWebhook:
         patch = PatchSet(all_changes)
         return patch
 
+    def get_pull_request_files_from_patch_set(self, patch_set: List[PatchedFile]) -> List[PullRequestFile]:
+        files_list = []
+        for file in patch_set:
+            if file.is_added_file:
+                action = FileAction.created
+            elif file.is_removed_file:
+                action = FileAction.removed
+            elif file.is_rename:
+                action = FileAction.renamed
+            else:
+                action = FileAction.changed
+            files_list.append(
+                PullRequestFile(
+                    filename=file.path,
+                    action=action,
+                    diff=PatchedFileRepr(file)
+                )
+            )
+        return files_list
+
     async def parse(self) -> PullRequest:
         data = await self.get_data()
         user = await self.get_user_by_id(data['object_attributes']['author_id'])
@@ -79,6 +100,7 @@ class GitlabWebhook:
         merge_request = await self.get_project_merge_request_by_iid(project, data['object_attributes']['iid'])
         changes = await self.get_merge_request_changes(merge_request)
         patch_set = self.build_patch_set(changes)
+        pr_files = self.get_pull_request_files_from_patch_set(patch_set)
 
         pr = PullRequest(
             id=data['object_attributes']['iid'],  # Preferring internal ID as this will be used as reference
@@ -90,6 +112,6 @@ class GitlabWebhook:
             repository_name=data['object_attributes']['target']['name'],
             repository_url=data['object_attributes']['target']['web_url'],
             pr_url=data['object_attributes']['url'],
-            changes=[],
+            changes=pr_files,
         )
         return pr
