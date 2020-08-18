@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.responses import JSONResponse
 
+from destinations.slack import SlackNotifier
 from sources.gitlab import GitlabWebhook
 
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
@@ -25,6 +26,8 @@ async def webhooks_gitlab(request: Request):
     pull_request = await webhook.parse()
     logger.info("Got pull request")
     json_data = jsonable_encoder(pull_request)
+    slack = SlackNotifier(SLACK_WEBHOOK_URL)
+    await slack.notify_of_pull_request(pull_request)
     return JSONResponse(json_data)
 
 
