@@ -41,7 +41,7 @@ class SlackNotifier:
                     "text": {
                         "type": "plain_text",
                         "emoji": True,
-                        "text": "Approve"
+                        "text": "Approve this"
                     },
                     "style": "primary",
                     "value": "click_me_123"
