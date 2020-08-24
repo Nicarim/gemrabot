@@ -13,11 +13,12 @@ class SlackNotifier:
             changes_list.append({
                 "type": "divider"
             })
+            fmt_message = '\n'.join(change.diff.split('\n')[4:])
             changes_list.append({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*Filename:* {change.filename}\n```{change.diff}```"
+                    "text": f"*Filename:* {change.filename}\n```{fmt_message}```"
                 }
             })
         return changes_list
@@ -27,7 +28,7 @@ class SlackNotifier:
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "New pull request is pending review\n*{name_of_pr}*"
+                "text": f"New pull request is pending review\n *<{pull_request.pr_url}|{pull_request.title}>*"
             }
         }
         blocks = [headline]
