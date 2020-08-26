@@ -41,7 +41,10 @@ class PullRequest(BaseModel):
     status: PullRequestStatus
     author_name: str
     author_url: AnyHttpUrl
+    repository_id: int
     repository_name: str
     repository_url: AnyHttpUrl
+    approvals: str
+    approval_count: int
     pr_url: AnyHttpUrl
     changes: List[PullRequestFile] = []
