@@ -9,6 +9,8 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
+    view_submission_add_gl_project_to_ch_submit
 from api.destinations.messages import get_config_empty_message, get_config_project_list, get_view_add_project
 from api.destinations.slack import SlackNotifier
 from api.models import SlackUser, GitlabRepoChMapping
@@ -73,49 +75,14 @@ def slack_interactivity(request: Request):
     if payload['type'] == "block_actions":
         action_ids = [p['action_id'] for p in payload['actions']]
         if "add_project_to_channel" in action_ids:
-            requests.post('https://slack.com/api/views.open', {
-                'token': slack_user.access_token,
-                'trigger_id': trigger_id,
-                'view': json.dumps(get_view_add_project())
-            })
-            requests.post(payload['response_url'], json={
-                "delete_original": True
-            })
+            return add_project_to_channel(slack_user.access_token, trigger_id, payload['response_url'])
         if "approve_mr_action" in action_ids:
-            gl_client = Gitlab('https://gitlab.com', private_token=settings.GITLAB_API_KEY)
             action_name, project_id, pull_request_id = payload['actions'][0]['value'].split('-')
-            if action_name == "approve":
-                gl_project = gl_client.projects.get(project_id)
-                gl_mr = gl_project.mergerequests.get(pull_request_id)
-                gl_mr.approve()
+            return approve_mr_action(action_name, project_id, pull_request_id)
     if payload['type'] == "view_submission":
         if payload['view']['callback_id'] == "add_gitlab_project_to_channel_cb":
-            all_values = [v for _, v in payload['view']['state']['values'].items()]
-            result = {}
-            for v in all_values:
-                result.update(v)
-            channel_id = result['add_gitlab_channel_id']['selected_channel']
-            project_id = result['add_gitlab_project_id']['value']
-            gl_client = Gitlab('https://gitlab.com', private_token=settings.GITLAB_API_KEY)
-            try:
-                gl_project = gl_client.projects.get(project_id)
-            except GitlabGetError:
-                return Response({
-                    "response_action": "errors",
-                    "errors": {
-                        "project_id_bl": "This project doesn't exist in gitlab.com for your access key\n"
-                                         "Can be either numeric ID or full project path 'group_name/project_name'"
-                    }
-                })
-            # throw error if such combination already exists
-            GitlabRepoChMapping.objects.create(
-                slack_user=slack_user,
-                channel_id=channel_id,
-                repository_id=gl_project.id,
-                repository_name=gl_project.name,
-            )
-            return Response({
-                "response_action": "clear",
-            })
+            return view_submission_add_gl_project_to_ch_submit(slack_user, payload)
 
+    logger.error("Unknown interaction has been reached")
+    logger.error(request.data.get('payload'))
     return Response({})
