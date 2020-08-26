@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from api.destinations.messages import get_config_empty_message, get_config_project_list, get_view_add_project
 from api.destinations.slack import SlackNotifier
 from api.models import SlackUser, GitlabRepoChMapping
 from api.sources.gitlab import GitlabWebhook
@@ -56,53 +57,10 @@ def oauth_slack(request: Request):
 def slack_command(request: Request):
     team_id = request.data.get('team_id')
     slack_user = SlackUser.objects.filter(team_id=team_id).first()
-    channel_id = request.data.get('channel_id')
-    token = slack_user.access_token
     gl_mappings = GitlabRepoChMapping.objects.filter(slack_user=slack_user).all()
-    append_response = []
     if len(gl_mappings) <= 0:
-        append_response.append({
-            'type': 'section',
-            'text': {
-                'type': 'mrkdwn',
-                'text': 'Currently no channels are added, please use buttons below to add new channels'
-            }
-        })
-    else:
-        append_response.append({
-            'type': 'section',
-            'text': {
-                'type': 'mrkdwn',
-                'text': f'You have {len(gl_mappings)} project connected: '
-            }
-        })
-        for mapping in gl_mappings:
-            append_response.append({
-                'type': 'section',
-                'text': {
-                    'type': 'mrkdwn',
-                    'text': f'- Project *{mapping.repository_name}* is connected to channel *<#{mapping.channel_id}>*'
-                }
-            })
-    response = {
-        'blocks': []
-    }
-    for x in append_response:
-        response['blocks'].append(x)
-    response['blocks'].append({
-        "type": "actions",
-        "elements": [
-            {
-                "type": "button",
-                "action_id": "add_project_to_channel",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Add new project to a channel"
-                }
-            }
-        ]
-    })
-    return JsonResponse(response)
+        return JsonResponse(get_config_empty_message())
+    return JsonResponse(get_config_project_list(gl_mappings))
 
 
 @api_view(['POST'])
@@ -115,61 +73,10 @@ def slack_interactivity(request: Request):
     if payload['type'] == "block_actions":
         action_ids = [p['action_id'] for p in payload['actions']]
         if "add_project_to_channel" in action_ids:
-            modal = {
-                "title": {
-                    "type": "plain_text",
-                    "text": "Add project",
-                    "emoji": True
-                },
-                "callback_id": "add_gitlab_project_to_channel_cb",
-                "submit": {
-                    "type": "plain_text",
-                    "text": "Add",
-                    "emoji": True
-                },
-                "type": "modal",
-                "close": {
-                    "type": "plain_text",
-                    "text": "Cancel",
-                    "emoji": True
-                },
-                "blocks": [
-                    {
-                        "type": "input",
-                        "label": {
-                            "type": "plain_text",
-                            "text": "Select channel to which it should post",
-                            "emoji": True
-                        },
-                        "element": {
-                            "type": "channels_select",
-                            "action_id": "add_gitlab_channel_id",
-                            "placeholder": {
-                                "type": "plain_text",
-                                "text": "Choose list",
-                                "emoji": True
-                            }
-                        }
-                    },
-                    {
-                        "type": "input",
-                        "block_id": "project_id_bl",
-                        "element": {
-                            "type": "plain_text_input",
-                            "action_id": "add_gitlab_project_id"
-                        },
-                        "label": {
-                            "type": "plain_text",
-                            "text": "Here put project id (seen in settings) of gitlab project",
-                            "emoji": True
-                        }
-                    }
-                ]
-            }
             requests.post('https://slack.com/api/views.open', {
                 'token': slack_user.access_token,
                 'trigger_id': trigger_id,
-                'view': json.dumps(modal)
+                'view': json.dumps(get_view_add_project())
             })
             requests.post(payload['response_url'], json={
                 "delete_original": True
