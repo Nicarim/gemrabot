@@ -1,19 +1,19 @@
 [tool.poetry]
-name = "gemrabot"
+name = "gemrabot-v2"
 version = "0.1.0"
-description = "Gemrabot is a bot that helps you get your merge requests approved faster and easier"
+description = ""
 authors = ["Marcin Gordziejewski <655590+Nicarim@users.noreply.github.com>"]
-license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-pip = "^20.2.2"
-fastapi = "^0.61.0"
-uvicorn = "^0.11.8"
-httpx = "^0.14.1"
-python-gitlab = "^2.4.0"
-aioify = "^0.3.2"
+django = "^3.1"
+djangorestframework = "^3.11.1"
+python-dotenv = "^0.14.0"
+django-enumchoicefield = "^2.0.0"
 unidiff = "^0.6.0"
+python-gitlab = "^2.4.0"
+requests = "^2.24.0"
+pydantic = "^1.6.1"
 
 [tool.poetry.dev-dependencies]
 

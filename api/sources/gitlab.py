@@ -1,14 +1,12 @@
-import json
 import logging
 from typing import List
 
-from aioify import aioify
-from fastapi import Request
 from gitlab import Gitlab
 from gitlab.v4.objects import Project
+from rest_framework.request import Request
 from unidiff import PatchSet, PatchedFile
 
-from structures import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr
+from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr
 
 logger = logging.getLogger(__name__)
 
@@ -19,28 +17,24 @@ class GitlabWebhook:
         self.api_key = gitlab_access_key
         self.client = Gitlab('https://gitlab.com', private_token=self.api_key)
 
-    async def validate(self) -> bool:
+    def validate(self) -> bool:
         x_gitlab_event = self.request.headers.get('X-Gitlab-Event', 'Invalid')
         if x_gitlab_event != "Merge Request Hook":
             logger.error(f"Expected MR hook, got instead {x_gitlab_event}")
             return True
         return True
 
-    async def get_user_by_id(self, user_id: int):
-        gl_get_users = aioify(obj=self.client.users.get)
-        return await gl_get_users(user_id)
+    def get_user_by_id(self, user_id: int):
+        return self.client.users.get(user_id)
 
-    async def get_project_by_id(self, project_id: int):
-        gl_get_project = aioify(obj=self.client.projects.get)
-        return await gl_get_project(project_id)
+    def get_project_by_id(self, project_id: int):
+        return self.client.projects.get(project_id)
 
-    async def get_project_merge_request_by_iid(self, project: Project, merge_request_id: int):
-        gl_get_mr = aioify(obj=project.mergerequests.get)
-        return await gl_get_mr(merge_request_id)
+    def get_project_merge_request_by_iid(self, project: Project, merge_request_id: int):
+        return project.mergerequests.get(merge_request_id)
 
-    async def get_merge_request_changes(self, mr):
-        gl_get_changes = aioify(obj=mr.changes)
-        return await gl_get_changes()
+    def get_merge_request_changes(self, mr):
+        return mr.changes()
 
     @staticmethod
     def get_mr_status(data) -> PullRequestStatus:
@@ -51,10 +45,10 @@ class GitlabWebhook:
         logger.error(f"Unexpected state, expected closed/opened, got {data['object_attributes']['state']}")
         raise ValueError("Unexpected MR state")
 
-    async def get_data(self):
-        f = open('gitlab_test_data.json')
-        return json.loads(f.read())
-        # return await self.request.json()
+    def get_data(self):
+        # f = open('gitlab_test_data.json')
+        # return json.loads(f.read())
+        return self.request.data
 
     def build_patch_set(self, changes):
         all_changes = ""
@@ -93,15 +87,16 @@ class GitlabWebhook:
             )
         return files_list
 
-    async def parse(self) -> PullRequest:
-        data = await self.get_data()
-        user = await self.get_user_by_id(data['object_attributes']['author_id'])
-        project = await self.get_project_by_id(data['object_attributes']['target_project_id'])
-        merge_request = await self.get_project_merge_request_by_iid(project, data['object_attributes']['iid'])
-        changes = await self.get_merge_request_changes(merge_request)
+    def parse(self) -> PullRequest:
+        data = self.get_data()
+        user = self.get_user_by_id(data['object_attributes']['author_id'])
+        project = self.get_project_by_id(data['object_attributes']['target_project_id'])
+        merge_request = self.get_project_merge_request_by_iid(project, data['object_attributes']['iid'])
+        approvals = merge_request.approvals.get()
+        changes = self.get_merge_request_changes(merge_request)
         patch_set = self.build_patch_set(changes)
         pr_files = self.get_pull_request_files_from_patch_set(patch_set)
-
+        approval_names = [x['user']['name'] for x in approvals.approved_by]
         pr = PullRequest(
             id=data['object_attributes']['iid'],  # Preferring internal ID as this will be used as reference
             title=data['object_attributes']['title'],
@@ -109,6 +104,9 @@ class GitlabWebhook:
             status=self.get_mr_status(data),
             author_name=user.name,
             author_url=user.web_url,
+            approvals=','.join(approval_names),
+            approval_count=len(approval_names),
+            repository_id=data['object_attributes']['target_project_id'],
             repository_name=data['object_attributes']['target']['name'],
             repository_url=data['object_attributes']['target']['web_url'],
             pr_url=data['object_attributes']['url'],
