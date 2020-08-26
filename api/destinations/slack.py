@@ -1,6 +1,8 @@
+from datetime import timedelta
+
 import requests
 
-from api.data_models import PullRequest
+from api.data_models import PullRequest, PullRequestStatus
 from api.models import PrMessage
 
 
@@ -25,12 +27,58 @@ class SlackNotifier:
             })
         return changes_list
 
+    @staticmethod
+    def td_format(td_object):
+        seconds = int(td_object.total_seconds())
+        periods = [
+            ('year', 60 * 60 * 24 * 365),
+            ('month', 60 * 60 * 24 * 30),
+            ('day', 60 * 60 * 24),
+            ('hour', 60 * 60),
+            ('minute', 60),
+            ('second', 1)
+        ]
+
+        strings = []
+        for period_name, period_seconds in periods:
+            if seconds > period_seconds:
+                period_value, seconds = divmod(seconds, period_seconds)
+                has_s = 's' if period_value > 1 else ''
+                strings.append("%s %s%s" % (period_value, period_name, has_s))
+
+        return ", ".join(strings)
+
     def get_slack_message(self, pull_request):
+        if pull_request.status == PullRequestStatus.closed:
+            return {
+                'blocks': [{
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"Pull request has been closed by *{pull_request.closed_by}*\n "
+                                f"*<{pull_request.pr_url}|{pull_request.title} by {pull_request.author_name}>*"
+                    }
+                }]
+            }
+        if pull_request.status == PullRequestStatus.merged:
+            it_took = timedelta(seconds=pull_request.time_to_merge)
+            return {
+                'blocks': [{
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f":fire: Pull request has been merged by *{pull_request.merged_by}* "
+                                f"in {self.td_format(it_took)} :fire:\n "
+                                f"*<{pull_request.pr_url}|{pull_request.title} by {pull_request.author_name}>*"
+                    }
+                }]
+            }
         headline = {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"New pull request is pending review\n *<{pull_request.pr_url}|{pull_request.title}>*"
+                "text": f"New pull request is pending review\n "
+                        f"*<{pull_request.pr_url}|{pull_request.title} by {pull_request.author_name}>*"
             }
         }
         blocks = [headline]

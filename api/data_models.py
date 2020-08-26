@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, AnyHttpUrl
 
@@ -25,6 +25,7 @@ class FileAction(str, Enum):
 
 class PullRequestStatus(str, Enum):
     opened = 'opened'
+    merged = 'merged'
     closed = 'closed'
 
 
@@ -39,6 +40,8 @@ class PullRequest(BaseModel):
     title: str
     description: str
     status: PullRequestStatus
+    closed_by: Optional[str]
+    merged_by: Optional[str]
     author_name: str
     author_url: AnyHttpUrl
     repository_id: int
@@ -47,4 +50,5 @@ class PullRequest(BaseModel):
     approvals: str
     approval_count: int
     pr_url: AnyHttpUrl
+    time_to_merge: int
     changes: List[PullRequestFile] = []

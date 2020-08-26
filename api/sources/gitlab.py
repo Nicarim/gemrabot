@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+from dateutil.parser import parse
 from gitlab import Gitlab
 from gitlab.v4.objects import Project
 from rest_framework.request import Request
@@ -42,6 +43,8 @@ class GitlabWebhook:
             return PullRequestStatus.opened
         elif data['object_attributes']['state'] == 'closed':
             return PullRequestStatus.closed
+        elif data['object_attributes']['state'] == 'merged':
+            return PullRequestStatus.merged
         logger.error(f"Unexpected state, expected closed/opened, got {data['object_attributes']['state']}")
         raise ValueError("Unexpected MR state")
 
@@ -97,11 +100,25 @@ class GitlabWebhook:
         patch_set = self.build_patch_set(changes)
         pr_files = self.get_pull_request_files_from_patch_set(patch_set)
         approval_names = [x['user']['name'] for x in approvals.approved_by]
+        status = self.get_mr_status(data)
+        closed_by = ""
+        merged_by = ""
+        time_to_merge = 0
+        if status == PullRequestStatus.closed:
+            closed_by = merge_request.closed_by['name']
+        if status == PullRequestStatus.merged:
+            merged_at = parse(merge_request.merged_at)
+            created_at = parse(merge_request.created_at)
+            diff = merged_at - created_at
+            time_to_merge = diff.total_seconds()
+            merged_by = merge_request.merged_by['name']
         pr = PullRequest(
             id=data['object_attributes']['iid'],  # Preferring internal ID as this will be used as reference
             title=data['object_attributes']['title'],
             description=data['object_attributes']['description'],
-            status=self.get_mr_status(data),
+            status=status,
+            closed_by=closed_by,
+            merged_by=merged_by,
             author_name=user.name,
             author_url=user.web_url,
             approvals=','.join(approval_names),
@@ -110,6 +127,7 @@ class GitlabWebhook:
             repository_name=data['object_attributes']['target']['name'],
             repository_url=data['object_attributes']['target']['web_url'],
             pr_url=data['object_attributes']['url'],
+            time_to_merge=time_to_merge,
             changes=pr_files,
         )
         return pr
