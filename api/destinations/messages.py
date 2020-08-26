@@ -109,6 +109,37 @@ def _get_config_buttons():
     }
 
 
+def _get_gl_auth_buttons():
+    return {
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "action_id": "add_gl_auth_to_user",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Auth with gitlab"
+                }
+            }
+        ]
+    }
+
+
+def get_gl_authorization_empty():
+    return {
+        'blocks': [
+            {
+                'type': 'section',
+                'text': {
+                    'type': 'mrkdwn',
+                    'text': "You're currently not connected to any gitlab account"
+                }
+            },
+            _get_gl_auth_buttons()
+        ]
+    }
+
+
 def get_config_empty_message():
     return {
         'blocks': [

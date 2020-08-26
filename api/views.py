@@ -4,16 +4,15 @@ import logging
 import requests
 from django.conf import settings
 from django.http import JsonResponse
-from gitlab import Gitlab, GitlabGetError
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
     view_submission_add_gl_project_to_ch_submit
-from api.destinations.messages import get_config_empty_message, get_config_project_list, get_view_add_project
+from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty
 from api.destinations.slack import SlackNotifier
-from api.models import SlackUser, GitlabRepoChMapping
+from api.models import SlackUser, GitlabRepoChMapping, UserGitlabAccessToken
 from api.sources.gitlab import GitlabWebhook
 from gemrabot.redirects import SlackRedirect
 
@@ -58,11 +57,18 @@ def oauth_slack(request: Request):
 @api_view(['POST'])
 def slack_command(request: Request):
     team_id = request.data.get('team_id')
+    user_id = request.data.get('user_id')
     slack_user = SlackUser.objects.filter(team_id=team_id).first()
     gl_mappings = GitlabRepoChMapping.objects.filter(slack_user=slack_user).all()
+    gl_auth = UserGitlabAccessToken.objects.filter(user_id=user_id, slack_user=slack_user).all()
     if len(gl_mappings) <= 0:
-        return JsonResponse(get_config_empty_message())
-    return JsonResponse(get_config_project_list(gl_mappings))
+        response = get_config_empty_message()
+    else:
+        response = get_config_project_list(gl_mappings)
+    if len(gl_auth) <= 0:
+        for block in get_gl_authorization_empty()['blocks']:
+            response['blocks'].append(block)
+    return JsonResponse(response)
 
 
 @api_view(['POST'])
