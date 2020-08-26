@@ -97,17 +97,6 @@ class SlackNotifier:
                     },
                     "style": "primary",
                     "value": f"approve-{pull_request.repository_id}-{pull_request.id}"
-                },
-                {
-                    "type": "button",
-                    "action_id": "deny_mr_action",
-                    "text": {
-                        "type": "plain_text",
-                        "emoji": True,
-                        "text": "Deny"
-                    },
-                    "style": "danger",
-                    "value": f"deny-{pull_request.repository_id}-{pull_request.id}"
                 }
             ]
         })
