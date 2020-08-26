@@ -9,7 +9,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
-    view_submission_add_gl_project_to_ch_submit
+    view_submission_add_gl_project_to_ch_submit, add_gitlab_auth_token, view_submission_add_gitlab_user_auth_submit
 from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty
 from api.destinations.slack import SlackNotifier
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabAccessToken
@@ -82,13 +82,16 @@ def slack_interactivity(request: Request):
         action_ids = [p['action_id'] for p in payload['actions']]
         if "add_project_to_channel" in action_ids:
             return add_project_to_channel(slack_user.access_token, trigger_id, payload['response_url'])
+        if "add_gl_auth_to_user" in action_ids:
+            return add_gitlab_auth_token(slack_user.access_token, trigger_id, payload['response_url'])
         if "approve_mr_action" in action_ids:
             action_name, project_id, pull_request_id = payload['actions'][0]['value'].split('-')
             return approve_mr_action(action_name, project_id, pull_request_id)
     if payload['type'] == "view_submission":
         if payload['view']['callback_id'] == "add_gitlab_project_to_channel_cb":
             return view_submission_add_gl_project_to_ch_submit(slack_user, payload)
-
+        if payload['view']['callback_id'] == "add_gitlab_user_auth_cb":
+            return view_submission_add_gitlab_user_auth_submit(slack_user, payload)
     logger.error("Unknown interaction has been reached")
     logger.error(request.data.get('payload'))
     return Response({})

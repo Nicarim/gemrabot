@@ -2,11 +2,11 @@ import json
 
 import requests
 from django.conf import settings
-from gitlab import Gitlab, GitlabGetError
+from gitlab import Gitlab, GitlabGetError, GitlabAuthenticationError
 from rest_framework.response import Response
 
-from api.destinations.messages import get_view_add_project
-from api.models import GitlabRepoChMapping
+from api.destinations.messages import get_view_add_project, get_view_auth_with_gitlab
+from api.models import GitlabRepoChMapping, UserGitlabAccessToken
 
 
 def add_project_to_channel(access_token, trigger_id, response_url):
@@ -21,6 +21,18 @@ def add_project_to_channel(access_token, trigger_id, response_url):
     return Response({})
 
 
+def add_gitlab_auth_token(access_token, trigger_id, response_url):
+    requests.post('https://slack.com/api/views.open', {
+        'token': access_token,
+        'trigger_id': trigger_id,
+        'view': json.dumps(get_view_auth_with_gitlab())
+    })
+    requests.post(response_url, json={
+        "delete_original": True
+    })
+    return Response({})
+
+
 def approve_mr_action(action_name, project_id, pull_request_id):
     gl_client = Gitlab('https://gitlab.com', private_token=settings.GITLAB_API_KEY)
     if action_name == "approve":
@@ -28,6 +40,36 @@ def approve_mr_action(action_name, project_id, pull_request_id):
         gl_mr = gl_project.mergerequests.get(pull_request_id)
         gl_mr.approve()
     return Response({})
+
+
+def view_submission_add_gitlab_user_auth_submit(slack_user, payload):
+    all_values = [v for _, v in payload['view']['state']['values'].items()]
+    result = {}
+    for v in all_values:
+        result.update(v)
+    private_token = result['add_gitlab_user_auth_token']['value']
+    gl_client = Gitlab('https://gitlab.com', private_token=private_token)
+    try:
+        gl_client.auth()
+    except GitlabAuthenticationError:
+        return Response({
+            "response_action": "errors",
+            "errors": {
+                "personal_access_token_bl": "This token has been marked as invalid by gitlab.com, "
+                                            "make sure it is correct"
+            }
+        })
+    user = gl_client.user
+    slack_person_id = payload['user']['id']
+    UserGitlabAccessToken.objects.create(
+        user_id=slack_person_id,
+        user_name=user.name,
+        gitlab_access_token=private_token,
+        slack_user=slack_user
+    )
+    return Response({
+        "response_action": "clear",
+    })
 
 
 def view_submission_add_gl_project_to_ch_submit(slack_user, payload):

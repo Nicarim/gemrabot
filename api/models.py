@@ -19,6 +19,7 @@ class GitlabRepoChMapping(models.Model):
 
 class UserGitlabAccessToken(models.Model):
     user_id = models.CharField(max_length=255)
+    user_name = models.CharField(max_length=255)
     slack_user = models.ForeignKey(SlackUser, on_delete=models.CASCADE)
     gitlab_access_token = models.CharField(max_length=255)
 

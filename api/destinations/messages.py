@@ -179,6 +179,44 @@ def get_config_project_list(gl_mappings: List[GitlabRepoChMapping]):
     return result
 
 
+def get_view_auth_with_gitlab():
+    return {
+        "title": {
+            "type": "plain_text",
+            "text": "Gitlab Auth",
+            "emoji": True
+        },
+        "callback_id": "add_gitlab_user_auth_cb",
+        "submit": {
+            "type": "plain_text",
+            "text": "Add",
+            "emoji": True
+        },
+        "type": "modal",
+        "close": {
+            "type": "plain_text",
+            "text": "Cancel",
+            "emoji": True
+        },
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "personal_access_token_bl",
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "add_gitlab_user_auth_token"
+                },
+                "label": {
+                    "type": "plain_text",
+                    "text": "Here put generated personal access token ('/profile/personal_access_tokens') "
+                            "with 'api' grant",
+                    "emoji": True
+                }
+            }
+        ]
+    }
+
+
 def get_view_add_project():
     return {
         "title": {
