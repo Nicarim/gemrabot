@@ -1,4 +1,5 @@
 import requests
+from requests import exceptions as requests_exc
 
 from api.data_models import PullRequest, PullRequestStatus
 from api.destinations.messages import get_closed_message, get_merged_message, get_opened_message
@@ -13,11 +14,19 @@ class SlackClient:
             'Authorization': f'Bearer {access_token}'
         })
 
+    def _post(self, url, **kwargs):
+        response = self.session.post(url, **kwargs)
+        response.raise_for_status()
+        json = response.json()
+        if not json['ok']:
+            raise requests_exc.RequestException(json)
+        return json
+
     def post_message(self, json):
-        return self.session.post('https://slack.com/api/chat.postMessage', json=json).json()
+        return self._post('https://slack.com/api/chat.postMessage', json=json)
 
     def update_message(self, json):
-        return self.session.post('https://slack.com/api/chat.update', json=json).json()
+        return self._post('https://slack.com/api/chat.update', json=json)
 
 
 class SlackNotifier:
@@ -43,8 +52,6 @@ class SlackNotifier:
                 'channel': self.channel_id,
                 'blocks': message['blocks']
             })
-            if not response['ok']:
-                raise Exception(response)
             channel = response['channel']
             ts = response['ts']
             PrMessage.objects.create(
@@ -54,10 +61,8 @@ class SlackNotifier:
                 repository_id=pull_request.repository_id
             )
         else:
-            response = self.slack_client.update_message({
+            self.slack_client.update_message({
                 'channel': pr_message.message_channel,
                 'ts': pr_message.message_ts,
                 'blocks': message['blocks']
             })
-            if not response['ok']:
-                raise Exception(response)
