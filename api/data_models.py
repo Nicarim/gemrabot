@@ -2,12 +2,19 @@ from enum import Enum
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, AnyHttpUrl
+from unidiff import PatchedFile
 
 
 class PatchedFileRepr(str):
-    def __init__(self, pf):
+    def __init__(self, pf: PatchedFile):
         super().__init__()
         self.pf = pf
+
+    def lines_added(self):
+        return self.pf.added
+
+    def lines_removed(self):
+        return self.pf.removed
 
     def __str__(self):
         return str(self.pf)

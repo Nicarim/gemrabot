@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import List
 
+from api.data_models import PullRequestFile
 from api.models import GitlabRepoChMapping, UserGitlabAccessToken
 from api.utils import td_format
 
@@ -33,20 +34,48 @@ def get_merged_message(pull_request):
     }
 
 
-def _get_files_message(changes):
+def _get_files_message(changes: List[PullRequestFile]):
     changes_list = []
-    for change in changes[:5]:
-        changes_list.append({
-            "type": "divider"
-        })
-        fmt_message = '\n'.join(change.diff.split('\n')[4:])
-        changes_list.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Filename:* {change.filename}\n```{fmt_message}```"
-            }
-        })
+    all_added = sum([x.diff.lines_added() for x in changes])
+    all_removed = sum([x.diff.lines_removed() for x in changes])
+    if all_added + all_removed > 20:
+        for change in changes[:10]:
+            changes_list.append({
+                "type": "divider"
+            })
+            changes_list.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Filename:* {change.filename} "
+                            f":heavy_plus_sign:: {change.diff.lines_added()} / "
+                            f":heavy_minus_sign:: {change.diff.lines_removed()}"
+                }
+            })
+        if len(changes) > 10:
+            changes_list.append({
+                "type": "divider"
+            })
+            changes_list.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"And {len(changes) - 10} more files..."
+                }
+            })
+    else:
+        for change in changes:
+            changes_list.append({
+                "type": "divider"
+            })
+            fmt_message = '\n'.join(change.diff.split('\n')[4:])
+            changes_list.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Filename:* {change.filename}\n```{fmt_message}```"
+                }
+            })
     return changes_list
 
 
