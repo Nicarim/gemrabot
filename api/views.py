@@ -1,6 +1,7 @@
 import json
 import logging
 
+import requests
 from django.conf import settings
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
@@ -86,6 +87,11 @@ def slack_interactivity(request: Request):
             user_id = payload['user']['id']
             gl_auth = UserGitlabAccessToken.objects.filter(user_id=user_id, slack_user=slack_user).all()
             if len(gl_auth) <= 0:
+                requests.post(payload['response_url'], json={
+                    'replace_original': False,
+                    'response_type': 'ephemeral',
+                    'text': "Sorry you're not authorized with GitLab, type `/gemrabot` to authorize"
+                })
                 logger.error("User not authorized with GL")
                 return Response({})
             return approve_mr_action(action_name, project_id, pull_request_id, gl_auth[0])
