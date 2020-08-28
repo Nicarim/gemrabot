@@ -1,19 +1,18 @@
-import json
-
 import requests
 from django.conf import settings
 from gitlab import Gitlab, GitlabGetError, GitlabAuthenticationError
 from rest_framework.response import Response
 
 from api.destinations.messages import get_view_add_project, get_view_auth_with_gitlab
+from api.destinations.slack import SlackClient
 from api.models import GitlabRepoChMapping, UserGitlabAccessToken
 
 
 def add_project_to_channel(access_token, trigger_id, response_url):
-    requests.post('https://slack.com/api/views.open', {
-        'token': access_token,
+    client = SlackClient(access_token)
+    client.views_open({
         'trigger_id': trigger_id,
-        'view': json.dumps(get_view_add_project())
+        'view': get_view_add_project()
     })
     requests.post(response_url, json={
         "delete_original": True
@@ -22,10 +21,10 @@ def add_project_to_channel(access_token, trigger_id, response_url):
 
 
 def add_gitlab_auth_token(access_token, trigger_id, response_url):
-    requests.post('https://slack.com/api/views.open', {
-        'token': access_token,
+    client = SlackClient(access_token)
+    client.views_open({
         'trigger_id': trigger_id,
-        'view': json.dumps(get_view_auth_with_gitlab())
+        'view': get_view_auth_with_gitlab()
     })
     requests.post(response_url, json={
         "delete_original": True

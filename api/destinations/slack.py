@@ -14,7 +14,7 @@ class SlackClient:
             'Authorization': f'Bearer {access_token}'
         })
 
-    def _post(self, url, **kwargs):
+    def _json_post(self, url, **kwargs):
         response = self.session.post(url, **kwargs)
         response.raise_for_status()
         json = response.json()
@@ -23,10 +23,13 @@ class SlackClient:
         return json
 
     def post_message(self, json):
-        return self._post('https://slack.com/api/chat.postMessage', json=json)
+        return self._json_post('https://slack.com/api/chat.postMessage', json=json)
 
     def update_message(self, json):
-        return self._post('https://slack.com/api/chat.update', json=json)
+        return self._json_post('https://slack.com/api/chat.update', json=json)
+
+    def views_open(self, json):
+        return self._json_post('https://slack.com/api/views.open', json=json)
 
 
 class SlackNotifier:
