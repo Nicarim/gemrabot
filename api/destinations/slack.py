@@ -65,21 +65,27 @@ class SlackNotifier:
 
         pr_message = PrMessage.objects.filter(pr_id=pull_request.id, repository_id=pull_request.repository_id).first()
         if not pr_message:
-            response = self.slack_client.post_message({
-                'channel': self.channel_id,
-                'blocks': message['blocks']
-            })
-            channel = response['channel']
-            ts = response['ts']
-            PrMessage.objects.create(
-                message_channel=channel,
-                message_ts=ts,
-                pr_id=pull_request.id,
-                repository_id=pull_request.repository_id
-            )
+            self.create_message(message, pull_request)
         else:
-            self.slack_client.update_message({
-                'channel': pr_message.message_channel,
-                'ts': pr_message.message_ts,
-                'blocks': message['blocks']
-            })
+            self.update_message(message, pr_message)
+
+    def update_message(self, message, pr_message):
+        self.slack_client.update_message({
+            'channel': pr_message.message_channel,
+            'ts': pr_message.message_ts,
+            'blocks': message['blocks']
+        })
+
+    def create_message(self, message, pull_request):
+        response = self.slack_client.post_message({
+            'channel': self.channel_id,
+            'blocks': message['blocks']
+        })
+        channel = response['channel']
+        ts = response['ts']
+        PrMessage.objects.create(
+            message_channel=channel,
+            message_ts=ts,
+            pr_id=pull_request.id,
+            repository_id=pull_request.repository_id
+        )
