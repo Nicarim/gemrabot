@@ -5,9 +5,24 @@ from api.destinations.messages import get_closed_message, get_merged_message, ge
 from api.models import PrMessage
 
 
+class SlackClient:
+    def __init__(self, access_token):
+        self.access_token = access_token
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {access_token}'
+        })
+
+    def post_message(self, json):
+        return self.session.post('https://slack.com/api/chat.postMessage', json=json).json()
+
+    def update_message(self, json):
+        return self.session.post('https://slack.com/api/chat.update', json=json).json()
+
+
 class SlackNotifier:
     def __init__(self, slack_access_token, channel_id):
-        self.slack_access_token = slack_access_token
+        self.slack_client = SlackClient(slack_access_token)
         self.channel_id = channel_id
 
     @staticmethod
@@ -24,17 +39,14 @@ class SlackNotifier:
 
         pr_message = PrMessage.objects.filter(pr_id=pull_request.id, repository_id=pull_request.repository_id).first()
         if not pr_message:
-            r = requests.post('https://slack.com/api/chat.postMessage', json={
+            response = self.slack_client.post_message({
                 'channel': self.channel_id,
                 'blocks': message['blocks']
-            }, headers={
-                'Authorization': f'Bearer {self.slack_access_token}'
             })
-            response_json = r.json()
-            if not response_json['ok']:
-                raise Exception(response_json)
-            channel = response_json['channel']
-            ts = response_json['ts']
+            if not response['ok']:
+                raise Exception(response)
+            channel = response['channel']
+            ts = response['ts']
             PrMessage.objects.create(
                 message_channel=channel,
                 message_ts=ts,
@@ -42,13 +54,10 @@ class SlackNotifier:
                 repository_id=pull_request.repository_id
             )
         else:
-            r = requests.post('https://slack.com/api/chat.update', headers={
-                'Authorization': f'Bearer {self.slack_access_token}'
-            }, json={
+            response = self.slack_client.update_message({
                 'channel': pr_message.message_channel,
                 'ts': pr_message.message_ts,
                 'blocks': message['blocks']
             })
-            response_json = r.json()
-            if not response_json['ok']:
-                raise Exception(response_json)
+            if not response['ok']:
+                raise Exception(response)
