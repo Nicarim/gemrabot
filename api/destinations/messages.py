@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import List
 
-from api.models import GitlabRepoChMapping
+from api.models import GitlabRepoChMapping, UserGitlabAccessToken
 from api.utils import td_format
 
 
@@ -119,6 +119,20 @@ def _get_gl_auth_buttons():
                 "text": {
                     "type": "plain_text",
                     "text": "Auth with gitlab"
+                }
+            }
+        ]
+    }
+
+
+def get_gl_authorization_show(gl_auth: UserGitlabAccessToken):
+    return {
+        'blocks': [
+            {
+                'type': 'section',
+                'text': {
+                    'type': 'mrkdwn',
+                    'text': f"Connected as {gl_auth.user_name}"
                 }
             }
         ]

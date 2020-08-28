@@ -9,7 +9,8 @@ from rest_framework.response import Response
 
 from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
     view_submission_add_gl_project_to_ch_submit, add_gitlab_auth_token, view_submission_add_gitlab_user_auth_submit
-from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty
+from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty, \
+    get_gl_authorization_show
 from api.destinations.slack import SlackNotifier, slack_oauth_request
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabAccessToken
 from api.sources.gitlab import GitlabWebhook
@@ -61,6 +62,9 @@ def slack_command(request: Request):
         response = get_config_project_list(gl_mappings)
     if len(gl_auth) <= 0:
         for block in get_gl_authorization_empty()['blocks']:
+            response['blocks'].append(block)
+    else:
+        for block in get_gl_authorization_show(gl_auth[0])['blocks']:
             response['blocks'].append(block)
     return JsonResponse(response)
 
