@@ -75,7 +75,6 @@ def slack_interactivity(request: Request):
     team_id = payload['team']['id']
     trigger_id = payload['trigger_id']
     slack_user = SlackUser.objects.filter(team_id=team_id).first()
-
     if payload['type'] == "block_actions":
         action_ids = [p['action_id'] for p in payload['actions']]
         if "add_project_to_channel" in action_ids:
@@ -84,7 +83,12 @@ def slack_interactivity(request: Request):
             return add_gitlab_auth_token(slack_user.access_token, trigger_id, payload['response_url'])
         if "approve_mr_action" in action_ids:
             action_name, project_id, pull_request_id = payload['actions'][0]['value'].split('-')
-            return approve_mr_action(action_name, project_id, pull_request_id)
+            user_id = payload['user']['id']
+            gl_auth = UserGitlabAccessToken.objects.filter(user_id=user_id, slack_user=slack_user).all()
+            if len(gl_auth) <= 0:
+                logger.error("User not authorized with GL")
+                return Response({})
+            return approve_mr_action(action_name, project_id, pull_request_id, gl_auth[0])
     if payload['type'] == "view_submission":
         if payload['view']['callback_id'] == "add_gitlab_project_to_channel_cb":
             return view_submission_add_gl_project_to_ch_submit(slack_user, payload)

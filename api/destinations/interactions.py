@@ -32,8 +32,8 @@ def add_gitlab_auth_token(access_token, trigger_id, response_url):
     return Response({})
 
 
-def approve_mr_action(action_name, project_id, pull_request_id):
-    gl_client = Gitlab('https://gitlab.com', private_token=settings.GITLAB_API_KEY)
+def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGitlabAccessToken):
+    gl_client = Gitlab('https://gitlab.com', private_token=gl_auth.gitlab_access_token)
     if action_name == "approve":
         gl_project = gl_client.projects.get(project_id)
         gl_mr = gl_project.mergerequests.get(pull_request_id)
