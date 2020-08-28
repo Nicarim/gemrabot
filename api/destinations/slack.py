@@ -1,4 +1,5 @@
 import requests
+from django.conf import settings
 from requests import exceptions as requests_exc
 
 from api.data_models import PullRequest, PullRequestStatus
@@ -30,6 +31,19 @@ class SlackClient:
 
     def views_open(self, json):
         return self._json_post('https://slack.com/api/views.open', json=json)
+
+
+def slack_oauth_request(code):
+    response = requests.post('https://slack.com/api/oauth.v2.access', {
+        'code': code,
+        'client_id': settings.SLACK_CLIENT_ID,
+        'client_secret': settings.SLACK_CLIENT_SECRET,
+    })
+    response.raise_for_status()
+    json = response.json()
+    if not json['ok']:
+        raise requests_exc.RequestException(json)
+    return json
 
 
 class SlackNotifier:

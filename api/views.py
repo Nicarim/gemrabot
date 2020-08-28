@@ -1,7 +1,6 @@
 import json
 import logging
 
-import requests
 from django.conf import settings
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
@@ -11,7 +10,7 @@ from rest_framework.response import Response
 from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
     view_submission_add_gl_project_to_ch_submit, add_gitlab_auth_token, view_submission_add_gitlab_user_auth_submit
 from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty
-from api.destinations.slack import SlackNotifier
+from api.destinations.slack import SlackNotifier, slack_oauth_request
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabAccessToken
 from api.sources.gitlab import GitlabWebhook
 from gemrabot.redirects import SlackRedirect
@@ -38,18 +37,13 @@ def webhooks_gitlab(request: Request):
 @api_view(['GET'])
 def oauth_slack(request: Request):
     code = request.query_params.get('code')
-    response = requests.post('https://slack.com/api/oauth.v2.access', {
-        'code': code,
-        'client_id': settings.SLACK_CLIENT_ID,
-        'client_secret': settings.SLACK_CLIENT_SECRET,
-    })
-    json_response = response.json()
+    response = slack_oauth_request(code)
     SlackUser.objects.create(
-        bot_user_id=json_response['bot_user_id'],
-        team_id=json_response['team']['id'],
-        team_name=json_response['team']['name'],
-        user_id=json_response['authed_user']['id'],
-        access_token=json_response['access_token']
+        bot_user_id=response['bot_user_id'],
+        team_id=response['team']['id'],
+        team_name=response['team']['name'],
+        user_id=response['authed_user']['id'],
+        access_token=response['access_token']
     )
     return SlackRedirect('slack://open')
 
