@@ -5,6 +5,7 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from gitlab import Gitlab, GitlabAuthenticationError
+from rest_framework import exceptions
 from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -18,27 +19,34 @@ from api.destinations.messages import get_config_empty_message, get_config_proje
 from api.destinations.slack import SlackNotifier, slack_oauth_request
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabOAuthToken
 from api.sources.gitlab import GitlabOAuthClient, GitlabMergeRequest
-from api.utils import get_gitlab_redirect_uri
+from api.utils import get_gitlab_redirect_uri, measure
 from gemrabot.redirects import SlackRedirect
 
 logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@measure
 def webhooks_gitlab(request: Request):
+    gitlab_header_event = request.META.get('HTTP_X_GITLAB_EVENT')
+    if gitlab_header_event != "Merge Request Hook":
+        logger.error(f'Invalid x-gitlab-event hook detected, got {gitlab_header_event}')
+        raise exceptions.ValidationError("x-gitlab-event doesn't match merge request hook")
+    gitlab_header_token = request.META.get('HTTP_X_GITLAB_TOKEN')
     data = request.data
     gitlab_mr_webhook: GitlabMRWebhook = GitlabMRWebhook.parse_obj(data)
     gitlab_merge_request = GitlabMergeRequest(gitlab_mr_webhook, settings.GITLAB_API_KEY)
     pull_request = gitlab_merge_request.parse()
-    logger.info("Got pull request")
 
-    gl_mapping = GitlabRepoChMapping.objects.filter(
+    gl_mapping: GitlabRepoChMapping = GitlabRepoChMapping.objects.filter(
         repository_id=gitlab_mr_webhook.object_attributes.target_project_id
     ).first()
-
+    if str(gl_mapping.webhook_secret) != gitlab_header_token:
+        logger.error(f"Tokens mismatch")
+        raise exceptions.ValidationError("Invalid x-gitlab-token, request malformed")
     slack = SlackNotifier(gl_mapping.slack_user.access_token, gl_mapping.channel_id)
     slack.notify_of_pull_request(pull_request)
-    return Response(pull_request.dict())
+    return Response({'success': True})
 
 
 @api_view(['GET'])
@@ -152,7 +160,8 @@ def slack_interactivity(request: Request):
             return Response({})
     if payload['type'] == "view_submission":
         if payload['view']['callback_id'] == "add_gitlab_project_to_channel_cb":
-            return view_submission_add_gl_project_to_ch_submit(slack_user, payload)
+            gitlab_webhook_uri = request.build_absolute_uri(reverse('gitlab_webhooks'))
+            return view_submission_add_gl_project_to_ch_submit(slack_user, payload, gitlab_webhook_uri)
         if payload['view']['callback_id'] == "add_gitlab_user_auth_cb":
             return view_submission_add_gitlab_user_auth_submit(slack_user, payload)
     logger.error("Unknown interaction has been reached")

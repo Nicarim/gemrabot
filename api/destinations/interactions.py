@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import requests
 from django.conf import settings
 from gitlab import Gitlab, GitlabGetError, GitlabAuthenticationError
@@ -71,7 +73,7 @@ def view_submission_add_gitlab_user_auth_submit(slack_user, payload):
     })
 
 
-def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
+def view_submission_add_gl_project_to_ch_submit(slack_user, payload, gitlab_webhook_uri):
     all_values = [v for _, v in payload['view']['state']['values'].items()]
     result = {}
     for v in all_values:
@@ -93,6 +95,14 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
                                  "Can be either numeric ID or full project path 'group_name/project_name'"
             }
         })
+    secret_token = str(uuid4())
+    hook = gl_project.hooks.create({
+        'merge_requests_events': True,
+        'push_events': False,
+        'enable_ssl_verification': True,
+        'token': secret_token,
+        'url': gitlab_webhook_uri
+    })
     # throw error if such combination already exists
     GitlabRepoChMapping.objects.create(
         slack_user=slack_user,
@@ -100,7 +110,10 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
         repository_id=gl_project.id,
         repository_name=gl_project.name,
         gitlab_oauth_token=gl_oauth,
+        webhook_secret=secret_token,
+        webhook_id=hook.id
     )
+
     return Response({
         "response_action": "clear",
     })

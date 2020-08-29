@@ -30,6 +30,8 @@ class GitlabRepoChMapping(models.Model):
     repository_id = models.IntegerField(db_index=True)
     repository_name = models.CharField(max_length=255)
     gitlab_oauth_token = models.ForeignKey(UserGitlabOAuthToken, on_delete=models.CASCADE)
+    webhook_secret = models.UUIDField(default=uuid4)
+    webhook_id = models.IntegerField(default=None, null=True)
 
 
 class UserGitlabAccessToken(models.Model):
