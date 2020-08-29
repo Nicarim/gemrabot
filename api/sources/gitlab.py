@@ -1,12 +1,11 @@
 import logging
-from concurrent.futures.process import ProcessPoolExecutor
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List
 
 import requests
 from dateutil.parser import parse
 from django.conf import settings
-from gitlab.v4.objects import Project
+from rest_framework import exceptions
 from unidiff import PatchSet, PatchedFile
 
 from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr, \
@@ -176,3 +175,17 @@ class GitlabMergeRequest:
             time_to_merge=time_to_merge,
             changes=pr_files,
         )
+
+
+def validate_gitlab_header_event(request):
+    gitlab_header_event = request.META.get('HTTP_X_GITLAB_EVENT')
+    if gitlab_header_event != "Merge Request Hook":
+        logger.error(f'Invalid x-gitlab-event hook detected, got {gitlab_header_event}')
+        raise exceptions.ValidationError("x-gitlab-event doesn't match merge request hook")
+
+
+def validate_gitlab_header_token(request, gl_mapping):
+    gitlab_header_token = request.META.get('HTTP_X_GITLAB_TOKEN')
+    if str(gl_mapping.webhook_secret) != gitlab_header_token:
+        logger.error(f"Tokens mismatch")
+        raise exceptions.ValidationError("Invalid x-gitlab-token, request malformed")

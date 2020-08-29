@@ -18,7 +18,8 @@ from api.destinations.messages import get_config_empty_message, get_config_proje
     get_gl_authorization_show
 from api.destinations.slack import SlackNotifier, slack_oauth_request
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabOAuthToken
-from api.sources.gitlab import GitlabOAuthClient, GitlabMergeRequest
+from api.sources.gitlab import GitlabOAuthClient, GitlabMergeRequest, validate_gitlab_header_event, \
+    validate_gitlab_header_token
 from api.utils import get_gitlab_redirect_uri, measure
 from gemrabot.redirects import SlackRedirect
 
@@ -28,22 +29,23 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 @measure
 def webhooks_gitlab(request: Request):
-    gitlab_header_event = request.META.get('HTTP_X_GITLAB_EVENT')
-    if gitlab_header_event != "Merge Request Hook":
-        logger.error(f'Invalid x-gitlab-event hook detected, got {gitlab_header_event}')
-        raise exceptions.ValidationError("x-gitlab-event doesn't match merge request hook")
-    gitlab_header_token = request.META.get('HTTP_X_GITLAB_TOKEN')
-    data = request.data
-    gitlab_mr_webhook: GitlabMRWebhook = GitlabMRWebhook.parse_obj(data)
-    gitlab_merge_request = GitlabMergeRequest(gitlab_mr_webhook, settings.GITLAB_API_KEY)
-    pull_request = gitlab_merge_request.parse()
+    validate_gitlab_header_event(request)
 
+    gitlab_mr_webhook: GitlabMRWebhook = GitlabMRWebhook.parse_obj(request.data)
     gl_mapping: GitlabRepoChMapping = GitlabRepoChMapping.objects.filter(
         repository_id=gitlab_mr_webhook.object_attributes.target_project_id
     ).first()
-    if str(gl_mapping.webhook_secret) != gitlab_header_token:
-        logger.error(f"Tokens mismatch")
-        raise exceptions.ValidationError("Invalid x-gitlab-token, request malformed")
+
+    if not gl_mapping:
+        logger.error('Got request for unknown webhook')
+        raise exceptions.ValidationError("No repository registered for given webhook, ignoring")
+
+    validate_gitlab_header_token(request, gl_mapping)
+
+    gitlab_oauth_token = gl_mapping.gitlab_oauth_token
+    gitlab_merge_request = GitlabMergeRequest(gitlab_mr_webhook, gitlab_oauth_token.gitlab_access_token)
+    pull_request = gitlab_merge_request.parse()
+
     slack = SlackNotifier(gl_mapping.slack_user.access_token, gl_mapping.channel_id)
     slack.notify_of_pull_request(pull_request)
     return Response({'success': True})
