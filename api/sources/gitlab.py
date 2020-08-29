@@ -90,8 +90,6 @@ class GitlabWebhook:
         raise ValueError("Unexpected MR state")
 
     def get_data(self):
-        # f = open('gitlab_test_data.json')
-        # return json.loads(f.read())
         return self.request.data
 
     def build_patch_set(self, changes):
