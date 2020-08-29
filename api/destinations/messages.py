@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import List
 
 from api.data_models import PullRequestFile
-from api.models import GitlabRepoChMapping, UserGitlabAccessToken
+from api.models import GitlabRepoChMapping, UserGitlabOAuthToken
 from api.utils import td_format
 
 
@@ -138,7 +138,7 @@ def _get_config_buttons():
     }
 
 
-def _get_gl_auth_buttons():
+def _get_gl_auth_buttons(gitlab_oauth_url):
     return {
         "type": "actions",
         "elements": [
@@ -149,26 +149,44 @@ def _get_gl_auth_buttons():
                     "type": "plain_text",
                     "text": "Auth with gitlab"
                 }
-            }
-        ]
-    }
-
-
-def get_gl_authorization_show(gl_auth: UserGitlabAccessToken):
-    return {
-        'blocks': [
+            },
             {
-                'type': 'section',
-                'text': {
-                    'type': 'mrkdwn',
-                    'text': f"Connected as {gl_auth.user_name}"
+                "type": "button",
+                "action_id": "add_gl_auth_via_app_to_user",
+                "url": gitlab_oauth_url,
+                "text": {
+                    "type": "plain_text",
+                    "text": "Auth with gitlab (oauth)"
                 }
             }
         ]
     }
 
 
-def get_gl_authorization_empty():
+def get_gl_authorization_show(gl_auth: UserGitlabOAuthToken):
+    return {
+        'blocks': [
+            {
+                'type': 'section',
+                'text': {
+                    'type': 'mrkdwn',
+                    'text': f"Connected as {gl_auth.gitlab_user_name}"
+                },
+                'accessory': {
+                    "type": "button",
+                    "action_id": "remove_gl_auth_via_app_to_user",
+                    "style": "danger",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "DeAuth Gitlab",
+                    }
+                }
+            }
+        ]
+    }
+
+
+def get_gl_authorization_empty(gitlab_oauth_url):
     return {
         'blocks': [
             {
@@ -178,7 +196,7 @@ def get_gl_authorization_empty():
                     'text': "You're currently not connected to any gitlab account"
                 }
             },
-            _get_gl_auth_buttons()
+            _get_gl_auth_buttons(gitlab_oauth_url)
         ]
     }
 

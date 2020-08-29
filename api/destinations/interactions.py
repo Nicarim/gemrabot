@@ -5,7 +5,7 @@ from rest_framework.response import Response
 
 from api.destinations.messages import get_view_add_project, get_view_auth_with_gitlab
 from api.destinations.slack import SlackClient
-from api.models import GitlabRepoChMapping, UserGitlabAccessToken
+from api.models import GitlabRepoChMapping, UserGitlabAccessToken, UserGitlabOAuthToken
 
 
 def add_project_to_channel(access_token, trigger_id, response_url):
@@ -32,8 +32,8 @@ def add_gitlab_auth_token(access_token, trigger_id, response_url):
     return Response({})
 
 
-def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGitlabAccessToken):
-    gl_client = Gitlab(settings.GITLAB_HOST, private_token=gl_auth.gitlab_access_token)
+def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGitlabOAuthToken):
+    gl_client = Gitlab(settings.GITLAB_HOST, oauth_token=gl_auth.gitlab_access_token)
     if action_name == "approve":
         gl_project = gl_client.projects.get(project_id)
         gl_mr = gl_project.mergerequests.get(pull_request_id)
