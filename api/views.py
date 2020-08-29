@@ -95,12 +95,12 @@ def slack_command(request: Request):
     gl_mappings = GitlabRepoChMapping.objects.filter(slack_user=slack_user).all()
     gl_auth = UserGitlabOAuthToken.objects.filter(slack_user_id=user_id,
                                                   slack_team_id=team_id,
-                                                  slack_owner_user=slack_user).all()
+                                                  slack_owner_user=slack_user).first()
     if len(gl_mappings) <= 0:
         response = get_config_empty_message()
     else:
         response = get_config_project_list(gl_mappings)
-    if len(gl_auth) <= 0:
+    if not gl_auth:
         redirect_uri = get_gitlab_redirect_uri(request)
         gl_oauth_token, created = UserGitlabOAuthToken.objects.get_or_create(
             slack_owner_user=slack_user,
@@ -113,7 +113,7 @@ def slack_command(request: Request):
         for block in get_gl_authorization_empty(oauth_url)['blocks']:
             response['blocks'].append(block)
     else:
-        for block in get_gl_authorization_show(gl_auth[0])['blocks']:
+        for block in get_gl_authorization_show(gl_auth)['blocks']:
             response['blocks'].append(block)
     return JsonResponse(response)
 
@@ -135,8 +135,8 @@ def slack_interactivity(request: Request):
             user_id = payload['user']['id']
             gl_auth = UserGitlabOAuthToken.objects.filter(slack_user_id=user_id,
                                                           slack_team_id=team_id,
-                                                          slack_owner_user=slack_user).all()
-            if len(gl_auth) <= 0:
+                                                          slack_owner_user=slack_user).first()
+            if not gl_auth:
                 requests.post(payload['response_url'], json={
                     'replace_original': False,
                     'response_type': 'ephemeral',
@@ -144,7 +144,7 @@ def slack_interactivity(request: Request):
                 })
                 logger.error("User not authorized with GL")
                 return Response({})
-            return approve_mr_action(action_name, project_id, pull_request_id, gl_auth[0])
+            return approve_mr_action(action_name, project_id, pull_request_id, gl_auth)
         if "add_gl_auth_via_app_to_user" in action_ids:
             # no actions need since its redirect
             return Response({})
@@ -152,11 +152,11 @@ def slack_interactivity(request: Request):
             user_id = payload['user']['id']
             gl_auth = UserGitlabOAuthToken.objects.filter(slack_user_id=user_id,
                                                           slack_team_id=team_id,
-                                                          slack_owner_user=slack_user).all()
+                                                          slack_owner_user=slack_user).first()
             # call revoke authorization
             gitlab_oauth = GitlabOAuthClient.get_client()
-            gitlab_oauth.revoke_auth(gl_auth[0].gitlab_access_token)
-            gl_auth[0].delete()
+            gitlab_oauth.revoke_auth(gl_auth.gitlab_access_token)
+            gl_auth.delete()
             return Response({})
     if payload['type'] == "view_submission":
         if payload['view']['callback_id'] == "add_gitlab_project_to_channel_cb":
