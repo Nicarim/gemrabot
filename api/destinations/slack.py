@@ -1,6 +1,6 @@
 import requests
 from django.conf import settings
-from requests import exceptions as requests_exc
+from requests import exceptions as requests_exc, RequestException
 
 from api.data_models import PullRequest, PullRequestStatus
 from api.destinations.messages import get_closed_message, get_merged_message, get_opened_message
@@ -12,7 +12,8 @@ class SlackClient:
         self.access_token = access_token
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {access_token}'
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json; charset=utf-8'
         })
 
     def _json_post(self, url, **kwargs):
@@ -70,7 +71,13 @@ class SlackNotifier:
         if not pr_message:
             self.create_message(message, pull_request)
         else:
-            self.update_message(message, pr_message)
+            try:
+                self.update_message(message, pr_message)
+            except RequestException as e:
+                response = e.args[0]
+                if response['error'] == 'message_not_found':
+                    pr_message.delete()
+                    self.create_message(message, pull_request)
 
     def update_message(self, message, pr_message):
         self.slack_client.update_message({
