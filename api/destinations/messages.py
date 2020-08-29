@@ -144,19 +144,11 @@ def _get_gl_auth_buttons(gitlab_oauth_url):
         "elements": [
             {
                 "type": "button",
-                "action_id": "add_gl_auth_to_user",
-                "text": {
-                    "type": "plain_text",
-                    "text": "Auth with gitlab"
-                }
-            },
-            {
-                "type": "button",
                 "action_id": "add_gl_auth_via_app_to_user",
                 "url": gitlab_oauth_url,
                 "text": {
                     "type": "plain_text",
-                    "text": "Auth with gitlab (oauth)"
+                    "text": "OAuth with gitlab"
                 }
             }
         ]
