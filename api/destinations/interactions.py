@@ -33,7 +33,7 @@ def add_gitlab_auth_token(access_token, trigger_id, response_url):
 
 
 def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGitlabAccessToken):
-    gl_client = Gitlab('https://gitlab.com', private_token=gl_auth.gitlab_access_token)
+    gl_client = Gitlab(settings.GITLAB_HOST, private_token=gl_auth.gitlab_access_token)
     if action_name == "approve":
         gl_project = gl_client.projects.get(project_id)
         gl_mr = gl_project.mergerequests.get(pull_request_id)
@@ -47,7 +47,7 @@ def view_submission_add_gitlab_user_auth_submit(slack_user, payload):
     for v in all_values:
         result.update(v)
     private_token = result['add_gitlab_user_auth_token']['value']
-    gl_client = Gitlab('https://gitlab.com', private_token=private_token)
+    gl_client = Gitlab(settings.GITLAB_HOST, private_token=private_token)
     try:
         gl_client.auth()
     except GitlabAuthenticationError:
@@ -78,7 +78,7 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
         result.update(v)
     channel_id = result['add_gitlab_channel_id']['selected_channel']
     project_id = result['add_gitlab_project_id']['value']
-    gl_client = Gitlab('https://gitlab.com', private_token=settings.GITLAB_API_KEY)
+    gl_client = Gitlab(settings.GITLAB_HOST, private_token=settings.GITLAB_API_KEY)
     try:
         gl_project = gl_client.projects.get(project_id)
     except GitlabGetError:

@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from dateutil.parser import parse
+from django.conf import settings
 from gitlab import Gitlab
 from gitlab.v4.objects import Project
 from rest_framework.request import Request
@@ -16,7 +17,7 @@ class GitlabWebhook:
     def __init__(self, request: Request, gitlab_access_key: str):
         self.request = request
         self.api_key = gitlab_access_key
-        self.client = Gitlab('https://gitlab.com', private_token=self.api_key)
+        self.client = Gitlab(settings.GITLAB_HOST, private_token=self.api_key)
 
     def validate(self) -> bool:
         x_gitlab_event = self.request.headers.get('X-Gitlab-Event', 'Invalid')
