@@ -233,7 +233,8 @@ def get_config_project_list(gl_mappings: List[GitlabRepoChMapping]):
             'type': 'section',
             'text': {
                 'type': 'mrkdwn',
-                'text': f'- Project *{mapping.repository_name}* is connected to channel *<#{mapping.channel_id}>*'
+                'text': f'- Project *{mapping.repository_name}* is connected to channel *<#{mapping.channel_id}>* '
+                        f'by _{mapping.gitlab_oauth_token.gitlab_user_name}_'
             }
         })
     result['blocks'].append(_get_config_buttons())
