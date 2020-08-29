@@ -1,4 +1,10 @@
+import logging
+from time import time
+from functools import wraps
+
 from rest_framework.reverse import reverse
+
+logger = logging.getLogger(__name__)
 
 
 def td_format(td_object):
@@ -24,3 +30,15 @@ def td_format(td_object):
 
 def get_gitlab_redirect_uri(request):
     return request.build_absolute_uri(reverse('gitlab_oauth'))
+
+
+def measure(func):
+    @wraps(func)
+    def _time_it(*args, **kwargs):
+        start = int(round(time() * 1000))
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end_ = int(round(time() * 1000)) - start
+            logger.error(f"Total execution time: {end_ if end_ > 0 else 0} ms of {func.__name__}")
+    return _time_it

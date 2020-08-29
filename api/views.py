@@ -10,13 +10,14 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 
+from api.data_models import GitlabMRWebhook
 from api.destinations.interactions import add_project_to_channel, approve_mr_action, \
     view_submission_add_gl_project_to_ch_submit, add_gitlab_auth_token, view_submission_add_gitlab_user_auth_submit
 from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty, \
     get_gl_authorization_show
 from api.destinations.slack import SlackNotifier, slack_oauth_request
 from api.models import SlackUser, GitlabRepoChMapping, UserGitlabOAuthToken
-from api.sources.gitlab import GitlabWebhook, GitlabOAuthClient
+from api.sources.gitlab import GitlabOAuthClient, GitlabMergeRequest
 from api.utils import get_gitlab_redirect_uri
 from gemrabot.redirects import SlackRedirect
 
@@ -25,14 +26,15 @@ logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 def webhooks_gitlab(request: Request):
-    webhook = GitlabWebhook(request, settings.GITLAB_API_KEY)
-    is_valid = webhook.validate()
-    if not is_valid:
-        logger.info("Dropping on x_gitlab_event")
-        return
-    pull_request = webhook.parse()
+    data = request.data
+    gitlab_mr_webhook: GitlabMRWebhook = GitlabMRWebhook.parse_obj(data)
+    gitlab_merge_request = GitlabMergeRequest(gitlab_mr_webhook, settings.GITLAB_API_KEY)
+    pull_request = gitlab_merge_request.parse()
     logger.info("Got pull request")
-    gl_mapping = GitlabRepoChMapping.objects.filter(repository_id=pull_request.repository_id).first()
+
+    gl_mapping = GitlabRepoChMapping.objects.filter(
+        repository_id=gitlab_mr_webhook.object_attributes.target_project_id
+    ).first()
 
     slack = SlackNotifier(gl_mapping.slack_user.access_token, gl_mapping.channel_id)
     slack.notify_of_pull_request(pull_request)

@@ -58,12 +58,15 @@ class SlackNotifier:
             PullRequestStatus.closed: get_closed_message,
             PullRequestStatus.merged: get_merged_message,
         }
-        return func_mapper[pull_request.status](pull_request)
+        return func_mapper[pull_request.state](pull_request)
 
     def notify_of_pull_request(self, pull_request: PullRequest):
         message = self.get_slack_message(pull_request)
 
-        pr_message = PrMessage.objects.filter(pr_id=pull_request.id, repository_id=pull_request.repository_id).first()
+        pr_message = PrMessage.objects.filter(
+            pr_id=pull_request.id,
+            repository_id=pull_request.repository_id
+        ).first()
         if not pr_message:
             self.create_message(message, pull_request)
         else:

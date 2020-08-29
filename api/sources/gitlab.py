@@ -1,15 +1,17 @@
 import logging
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor
 from typing import List
 
 import requests
 from dateutil.parser import parse
 from django.conf import settings
-from gitlab import Gitlab
 from gitlab.v4.objects import Project
-from rest_framework.request import Request
 from unidiff import PatchSet, PatchedFile
 
-from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr
+from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr, \
+    GitlabMRWebhook
+from api.utils import measure
 
 logger = logging.getLogger(__name__)
 
@@ -53,44 +55,60 @@ class GitlabOAuthClient:
         return response.json()
 
 
-class GitlabWebhook:
-    def __init__(self, request: Request, gitlab_access_key: str):
-        self.request = request
-        self.api_key = gitlab_access_key
-        self.client = Gitlab(settings.GITLAB_HOST, private_token=self.api_key)
+class GitlabMergeRequest:
+    def __init__(self, gl_mr_webhook: GitlabMRWebhook, api_key):
+        self.gl_mr_webhook = gl_mr_webhook
+        self.api_key = api_key
+        self.user = None
+        self.project = None
+        self.merge_request = None
+        self.approvals = None
+        self.changes = None
 
-    def validate(self) -> bool:
-        x_gitlab_event = self.request.headers.get('X-Gitlab-Event', 'Invalid')
-        if x_gitlab_event != "Merge Request Hook":
-            logger.error(f"Expected MR hook, got instead {x_gitlab_event}")
-            return True
-        return True
+    def get_client(self):
+        session = requests.session()
+        session.headers.update({
+            'Authorization': f'Bearer {self.api_key}'
+        })
+        return session
 
-    def get_user_by_id(self, user_id: int):
-        return self.client.users.get(user_id)
+    def _get(self, url, **kwargs):
+        client = self.get_client()
+        response = client.get(url, **kwargs)
+        response.raise_for_status()
+        return response.json()
 
-    def get_project_by_id(self, project_id: int):
-        return self.client.projects.get(project_id)
+    def set_user(self, user_id: int):
+        self.user = self._get(f'{settings.GITLAB_HOST}/api/v4/users/{user_id}')
 
-    def get_project_merge_request_by_iid(self, project: Project, merge_request_id: int):
-        return project.mergerequests.get(merge_request_id)
+    def set_project(self, project_id: int):
+        self.project = self._get(f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}')
 
-    def get_merge_request_changes(self, mr):
-        return mr.changes()
+    def set_merge_request(self, project_id, merge_request_id: int):
+        self.merge_request = self._get(
+            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}'
+        )
 
-    @staticmethod
-    def get_mr_status(data) -> PullRequestStatus:
-        if data['object_attributes']['state'] == 'opened':
-            return PullRequestStatus.opened
-        elif data['object_attributes']['state'] == 'closed':
-            return PullRequestStatus.closed
-        elif data['object_attributes']['state'] == 'merged':
-            return PullRequestStatus.merged
-        logger.error(f"Unexpected state, expected closed/opened, got {data['object_attributes']['state']}")
-        raise ValueError("Unexpected MR state")
+    def set_changes(self, project_id, merge_request_id):
+        self.changes = self._get(
+            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/changes'
+        )
 
-    def get_data(self):
-        return self.request.data
+    def set_approvals(self, project_id, merge_request_id):
+        self.approvals = self._get(
+            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/approvals'
+        )
+
+    @measure
+    def fetch_all(self):
+        project_id = self.gl_mr_webhook.object_attributes.target_project_id
+        mr_id = self.gl_mr_webhook.object_attributes.iid
+        with ThreadPoolExecutor(max_workers=5) as e:
+            e.submit(self.set_user, self.gl_mr_webhook.object_attributes.author_id)
+            e.submit(self.set_project, project_id)
+            e.submit(self.set_merge_request, project_id, mr_id)
+            e.submit(self.set_changes, project_id, mr_id)
+            e.submit(self.set_approvals, project_id, mr_id)
 
     def build_patch_set(self, changes):
         all_changes = ""
@@ -129,44 +147,32 @@ class GitlabWebhook:
             )
         return files_list
 
+    @measure
     def parse(self) -> PullRequest:
-        data = self.get_data()
-        user = self.get_user_by_id(data['object_attributes']['author_id'])
-        project = self.get_project_by_id(data['object_attributes']['target_project_id'])
-        merge_request = self.get_project_merge_request_by_iid(project, data['object_attributes']['iid'])
-        approvals = merge_request.approvals.get()
-        changes = self.get_merge_request_changes(merge_request)
-        patch_set = self.build_patch_set(changes)
-        pr_files = self.get_pull_request_files_from_patch_set(patch_set)
-        approval_names = [x['user']['name'] for x in approvals.approved_by]
-        status = self.get_mr_status(data)
+        self.fetch_all()
+        approval_names = [x['user']['name'] for x in self.approvals['approved_by']]
         closed_by = ""
         merged_by = ""
         time_to_merge = 0
-        if status == PullRequestStatus.closed:
-            closed_by = merge_request.closed_by['name']
-        if status == PullRequestStatus.merged:
-            merged_at = parse(merge_request.merged_at)
-            created_at = parse(merge_request.created_at)
+        state = self.gl_mr_webhook.object_attributes.state
+        if state == PullRequestStatus.closed:
+            closed_by = self.merge_request['closed_by']['name']
+        if state == PullRequestStatus.merged:
+            merged_at = parse(self.merge_request['merged_at'])
+            created_at = parse(self.merge_request['created_at'])
             diff = merged_at - created_at
             time_to_merge = diff.total_seconds()
-            merged_by = merge_request.merged_by['name']
-        pr = PullRequest(
-            id=data['object_attributes']['iid'],  # Preferring internal ID as this will be used as reference
-            title=data['object_attributes']['title'],
-            description=data['object_attributes']['description'],
-            status=status,
+            merged_by = self.merge_request['merged_by']['name']
+        patch_set = self.build_patch_set(self.changes)
+        pr_files = self.get_pull_request_files_from_patch_set(patch_set)
+        return PullRequest(
+            gitlab_mr_webhook=self.gl_mr_webhook,
             closed_by=closed_by,
             merged_by=merged_by,
-            author_name=user.name,
-            author_url=user.web_url,
+            author_name=self.user['name'],
+            author_url=self.user['web_url'],
             approvals=','.join(approval_names),
             approval_count=len(approval_names),
-            repository_id=data['object_attributes']['target_project_id'],
-            repository_name=data['object_attributes']['target']['name'],
-            repository_url=data['object_attributes']['target']['web_url'],
-            pr_url=data['object_attributes']['url'],
             time_to_merge=time_to_merge,
             changes=pr_files,
         )
-        return pr
