@@ -7,18 +7,18 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0004_gitlabrepochmapping_gitlab_oauth_token'),
+        ("api", "0004_gitlabrepochmapping_gitlab_oauth_token"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='gitlabrepochmapping',
-            name='webhook_id',
+            model_name="gitlabrepochmapping",
+            name="webhook_id",
             field=models.IntegerField(default=None, null=True),
         ),
         migrations.AddField(
-            model_name='gitlabrepochmapping',
-            name='webhook_secret',
+            model_name="gitlabrepochmapping",
+            name="webhook_secret",
             field=models.UUIDField(default=uuid.uuid4),
         ),
     ]

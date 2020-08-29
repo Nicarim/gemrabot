@@ -7,14 +7,18 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0003_usergitlaboauthtoken'),
+        ("api", "0003_usergitlaboauthtoken"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='gitlabrepochmapping',
-            name='gitlab_oauth_token',
-            field=models.ForeignKey(default=None, on_delete=django.db.models.deletion.CASCADE, to='api.usergitlaboauthtoken'),
+            model_name="gitlabrepochmapping",
+            name="gitlab_oauth_token",
+            field=models.ForeignKey(
+                default=None,
+                on_delete=django.db.models.deletion.CASCADE,
+                to="api.usergitlaboauthtoken",
+            ),
             preserve_default=False,
         ),
     ]

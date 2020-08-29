@@ -25,16 +25,16 @@ class PatchedFileRepr(str):
 
 
 class FileAction(str, Enum):
-    changed = 'changed'
-    created = 'created'
-    renamed = 'renamed'
-    removed = 'removed'
+    changed = "changed"
+    created = "created"
+    renamed = "renamed"
+    removed = "removed"
 
 
 class PullRequestStatus(str, Enum):
-    opened = 'opened'
-    merged = 'merged'
-    closed = 'closed'
+    opened = "opened"
+    merged = "merged"
+    closed = "closed"
 
 
 class PullRequestFile(BaseModel):

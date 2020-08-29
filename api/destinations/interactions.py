@@ -12,29 +12,21 @@ from api.models import GitlabRepoChMapping, UserGitlabAccessToken, UserGitlabOAu
 
 def add_project_to_channel(access_token, trigger_id, response_url):
     client = SlackClient(access_token)
-    client.views_open({
-        'trigger_id': trigger_id,
-        'view': get_view_add_project()
-    })
-    requests.post(response_url, json={
-        "delete_original": True
-    })
+    client.views_open({"trigger_id": trigger_id, "view": get_view_add_project()})
+    requests.post(response_url, json={"delete_original": True})
     return Response({})
 
 
 def add_gitlab_auth_token(access_token, trigger_id, response_url):
     client = SlackClient(access_token)
-    client.views_open({
-        'trigger_id': trigger_id,
-        'view': get_view_auth_with_gitlab()
-    })
-    requests.post(response_url, json={
-        "delete_original": True
-    })
+    client.views_open({"trigger_id": trigger_id, "view": get_view_auth_with_gitlab()})
+    requests.post(response_url, json={"delete_original": True})
     return Response({})
 
 
-def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGitlabOAuthToken):
+def approve_mr_action(
+    action_name, project_id, pull_request_id, gl_auth: UserGitlabOAuthToken
+):
     gl_client = Gitlab(settings.GITLAB_HOST, oauth_token=gl_auth.gitlab_access_token)
     if action_name == "approve":
         gl_project = gl_client.projects.get(project_id)
@@ -44,65 +36,77 @@ def approve_mr_action(action_name, project_id, pull_request_id, gl_auth: UserGit
 
 
 def view_submission_add_gitlab_user_auth_submit(slack_user, payload):
-    all_values = [v for _, v in payload['view']['state']['values'].items()]
+    all_values = [v for _, v in payload["view"]["state"]["values"].items()]
     result = {}
     for v in all_values:
         result.update(v)
-    private_token = result['add_gitlab_user_auth_token']['value']
+    private_token = result["add_gitlab_user_auth_token"]["value"]
     gl_client = Gitlab(settings.GITLAB_HOST, private_token=private_token)
     try:
         gl_client.auth()
     except GitlabAuthenticationError:
-        return Response({
-            "response_action": "errors",
-            "errors": {
-                "personal_access_token_bl": "This token has been marked as invalid by gitlab.com, "
-                                            "make sure it is correct"
+        return Response(
+            {
+                "response_action": "errors",
+                "errors": {
+                    "personal_access_token_bl": "This token has been marked as invalid by gitlab.com, "
+                    "make sure it is correct"
+                },
             }
-        })
+        )
     user = gl_client.user
-    slack_person_id = payload['user']['id']
+    slack_person_id = payload["user"]["id"]
     UserGitlabAccessToken.objects.create(
         user_id=slack_person_id,
         user_name=user.name,
         gitlab_access_token=private_token,
-        slack_user=slack_user
+        slack_user=slack_user,
     )
-    return Response({
-        "response_action": "clear",
-    })
+    return Response(
+        {
+            "response_action": "clear",
+        }
+    )
 
 
-def view_submission_add_gl_project_to_ch_submit(slack_user, payload, gitlab_webhook_uri):
-    all_values = [v for _, v in payload['view']['state']['values'].items()]
+def view_submission_add_gl_project_to_ch_submit(
+    slack_user, payload, gitlab_webhook_uri
+):
+    all_values = [v for _, v in payload["view"]["state"]["values"].items()]
     result = {}
     for v in all_values:
         result.update(v)
-    channel_id = result['add_gitlab_channel_id']['selected_channel']
-    project_id = result['add_gitlab_project_id']['value']
-    gl_oauth = UserGitlabOAuthToken.objects.get(slack_owner_user=slack_user,
-                                                slack_user_id=payload['user']['id'],
-                                                slack_team_id=payload['team']['id'])
+    channel_id = result["add_gitlab_channel_id"]["selected_channel"]
+    project_id = result["add_gitlab_project_id"]["value"]
+    gl_oauth = UserGitlabOAuthToken.objects.get(
+        slack_owner_user=slack_user,
+        slack_user_id=payload["user"]["id"],
+        slack_team_id=payload["team"]["id"],
+    )
 
     gl_client = Gitlab(settings.GITLAB_HOST, oauth_token=gl_oauth.gitlab_access_token)
     try:
         gl_project = gl_client.projects.get(project_id)
     except GitlabGetError:
-        return Response({
-            "response_action": "errors",
-            "errors": {
-                "project_id_bl": "This project doesn't exist in gitlab.com for your access key\n"
-                                 "Can be either numeric ID or full project path 'group_name/project_name'"
+        return Response(
+            {
+                "response_action": "errors",
+                "errors": {
+                    "project_id_bl": "This project doesn't exist in gitlab.com for your access key\n"
+                    "Can be either numeric ID or full project path 'group_name/project_name'"
+                },
             }
-        })
+        )
     secret_token = str(uuid4())
-    hook = gl_project.hooks.create({
-        'merge_requests_events': True,
-        'push_events': False,
-        'enable_ssl_verification': True,
-        'token': secret_token,
-        'url': gitlab_webhook_uri
-    })
+    hook = gl_project.hooks.create(
+        {
+            "merge_requests_events": True,
+            "push_events": False,
+            "enable_ssl_verification": True,
+            "token": secret_token,
+            "url": gitlab_webhook_uri,
+        }
+    )
     # throw error if such combination already exists
     GitlabRepoChMapping.objects.create(
         slack_user=slack_user,
@@ -111,9 +115,11 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload, gitlab_webh
         repository_name=gl_project.name,
         gitlab_oauth_token=gl_oauth,
         webhook_secret=secret_token,
-        webhook_id=hook.id
+        webhook_id=hook.id,
     )
 
-    return Response({
-        "response_action": "clear",
-    })
+    return Response(
+        {
+            "response_action": "clear",
+        }
+    )

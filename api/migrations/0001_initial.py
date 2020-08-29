@@ -8,48 +8,89 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='PrMessage',
+            name="PrMessage",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('message_channel', models.CharField(max_length=255)),
-                ('message_ts', models.CharField(max_length=255)),
-                ('pr_id', models.IntegerField()),
-                ('repository_id', models.IntegerField()),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("message_channel", models.CharField(max_length=255)),
+                ("message_ts", models.CharField(max_length=255)),
+                ("pr_id", models.IntegerField()),
+                ("repository_id", models.IntegerField()),
             ],
         ),
         migrations.CreateModel(
-            name='SlackUser',
+            name="SlackUser",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('user_id', models.CharField(db_index=True, max_length=255)),
-                ('bot_user_id', models.CharField(db_index=True, max_length=255)),
-                ('team_id', models.CharField(db_index=True, max_length=255)),
-                ('team_name', models.CharField(max_length=255)),
-                ('access_token', models.CharField(max_length=255)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("user_id", models.CharField(db_index=True, max_length=255)),
+                ("bot_user_id", models.CharField(db_index=True, max_length=255)),
+                ("team_id", models.CharField(db_index=True, max_length=255)),
+                ("team_name", models.CharField(max_length=255)),
+                ("access_token", models.CharField(max_length=255)),
             ],
         ),
         migrations.CreateModel(
-            name='UserGitlabAccessToken',
+            name="UserGitlabAccessToken",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('user_id', models.CharField(max_length=255)),
-                ('gitlab_access_token', models.CharField(max_length=255)),
-                ('slack_user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='api.slackuser')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("user_id", models.CharField(max_length=255)),
+                ("gitlab_access_token", models.CharField(max_length=255)),
+                (
+                    "slack_user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="api.slackuser"
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='GitlabRepoChMapping',
+            name="GitlabRepoChMapping",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('channel_id', models.CharField(db_index=True, max_length=255)),
-                ('repository_id', models.IntegerField(db_index=True)),
-                ('repository_name', models.CharField(max_length=255)),
-                ('slack_user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='api.slackuser')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("channel_id", models.CharField(db_index=True, max_length=255)),
+                ("repository_id", models.IntegerField(db_index=True)),
+                ("repository_name", models.CharField(max_length=255)),
+                (
+                    "slack_user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="api.slackuser"
+                    ),
+                ),
             ],
         ),
     ]

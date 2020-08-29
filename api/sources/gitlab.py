@@ -8,8 +8,14 @@ from django.conf import settings
 from rest_framework import exceptions
 from unidiff import PatchSet, PatchedFile
 
-from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr, \
-    GitlabMRWebhook
+from api.data_models import (
+    PullRequest,
+    PullRequestStatus,
+    FileAction,
+    PullRequestFile,
+    PatchedFileRepr,
+    GitlabMRWebhook,
+)
 from api.utils import measure
 
 logger = logging.getLogger(__name__)
@@ -23,33 +29,43 @@ class GitlabOAuthClient:
 
     @classmethod
     def get_client(cls):
-        return cls(settings.GITLAB_HOST, settings.GITLAB_APP_ID, settings.GITLAB_APP_SECRET)
+        return cls(
+            settings.GITLAB_HOST, settings.GITLAB_APP_ID, settings.GITLAB_APP_SECRET
+        )
 
-    def get_oauth_redirect_url(self, redirect_uri, state, scope='api'):
-        return f'{self.host}/oauth/authorize' \
-               f'?client_id={self.client_id}' \
-               f'&redirect_uri={redirect_uri}' \
-               f'&response_type=code' \
-               f'&state={state}' \
-               f'&scope={scope}'
+    def get_oauth_redirect_url(self, redirect_uri, state, scope="api"):
+        return (
+            f"{self.host}/oauth/authorize"
+            f"?client_id={self.client_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&response_type=code"
+            f"&state={state}"
+            f"&scope={scope}"
+        )
 
     def revoke_auth(self, token):
-        response = requests.post(f'{self.host}/oauth/revoke', {
-            'token': token,
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-        })
+        response = requests.post(
+            f"{self.host}/oauth/revoke",
+            {
+                "token": token,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
+        )
         response.raise_for_status()
         return response.json()
 
     def complete_auth(self, code, redirect_uri):
-        response = requests.post(f'{self.host}/oauth/token', {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'code': code,
-            'grant_type': 'authorization_code',
-            'redirect_uri': redirect_uri,
-        })
+        response = requests.post(
+            f"{self.host}/oauth/token",
+            {
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+            },
+        )
         response.raise_for_status()
         return response.json()
 
@@ -66,9 +82,7 @@ class GitlabMergeRequest:
 
     def get_client(self):
         session = requests.session()
-        session.headers.update({
-            'Authorization': f'Bearer {self.api_key}'
-        })
+        session.headers.update({"Authorization": f"Bearer {self.api_key}"})
         return session
 
     def _get(self, url, **kwargs):
@@ -78,24 +92,24 @@ class GitlabMergeRequest:
         return response.json()
 
     def set_user(self, user_id: int):
-        self.user = self._get(f'{settings.GITLAB_HOST}/api/v4/users/{user_id}')
+        self.user = self._get(f"{settings.GITLAB_HOST}/api/v4/users/{user_id}")
 
     def set_project(self, project_id: int):
-        self.project = self._get(f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}')
+        self.project = self._get(f"{settings.GITLAB_HOST}/api/v4/projects/{project_id}")
 
     def set_merge_request(self, project_id, merge_request_id: int):
         self.merge_request = self._get(
-            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}'
+            f"{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}"
         )
 
     def set_changes(self, project_id, merge_request_id):
         self.changes = self._get(
-            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/changes'
+            f"{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/changes"
         )
 
     def set_approvals(self, project_id, merge_request_id):
         self.approvals = self._get(
-            f'{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/approvals'
+            f"{settings.GITLAB_HOST}/api/v4/projects/{project_id}/merge_requests/{merge_request_id}/approvals"
         )
 
     @measure
@@ -111,10 +125,10 @@ class GitlabMergeRequest:
 
     def build_patch_set(self, changes):
         all_changes = ""
-        for change in changes['changes']:
-            changes_txt: str = change['diff']
+        for change in changes["changes"]:
+            changes_txt: str = change["diff"]
             header = f"diff --git a/{change['old_path']} b/{change['new_path']}\n"
-            if change['new_file']:
+            if change["new_file"]:
                 header += f"new file mode {change['b_mode']} \n"
             header += f"index 0000000..0000000 100644\n"
             if "Binary files" not in changes_txt:
@@ -126,7 +140,9 @@ class GitlabMergeRequest:
         patch = PatchSet(all_changes)
         return patch
 
-    def get_pull_request_files_from_patch_set(self, patch_set: List[PatchedFile]) -> List[PullRequestFile]:
+    def get_pull_request_files_from_patch_set(
+        self, patch_set: List[PatchedFile]
+    ) -> List[PullRequestFile]:
         files_list = []
         for file in patch_set:
             if file.is_added_file:
@@ -139,9 +155,7 @@ class GitlabMergeRequest:
                 action = FileAction.changed
             files_list.append(
                 PullRequestFile(
-                    filename=file.path,
-                    action=action,
-                    diff=PatchedFileRepr(file)
+                    filename=file.path, action=action, diff=PatchedFileRepr(file)
                 )
             )
         return files_list
@@ -149,28 +163,28 @@ class GitlabMergeRequest:
     @measure
     def parse(self) -> PullRequest:
         self.fetch_all()
-        approval_names = [x['user']['name'] for x in self.approvals['approved_by']]
+        approval_names = [x["user"]["name"] for x in self.approvals["approved_by"]]
         closed_by = ""
         merged_by = ""
         time_to_merge = 0
         state = self.gl_mr_webhook.object_attributes.state
         if state == PullRequestStatus.closed:
-            closed_by = self.merge_request['closed_by']['name']
+            closed_by = self.merge_request["closed_by"]["name"]
         if state == PullRequestStatus.merged:
-            merged_at = parse(self.merge_request['merged_at'])
-            created_at = parse(self.merge_request['created_at'])
+            merged_at = parse(self.merge_request["merged_at"])
+            created_at = parse(self.merge_request["created_at"])
             diff = merged_at - created_at
             time_to_merge = diff.total_seconds()
-            merged_by = self.merge_request['merged_by']['name']
+            merged_by = self.merge_request["merged_by"]["name"]
         patch_set = self.build_patch_set(self.changes)
         pr_files = self.get_pull_request_files_from_patch_set(patch_set)
         return PullRequest(
             gitlab_mr_webhook=self.gl_mr_webhook,
             closed_by=closed_by,
             merged_by=merged_by,
-            author_name=self.user['name'],
-            author_url=self.user['web_url'],
-            approvals=','.join(approval_names),
+            author_name=self.user["name"],
+            author_url=self.user["web_url"],
+            approvals=",".join(approval_names),
             approval_count=len(approval_names),
             time_to_merge=time_to_merge,
             changes=pr_files,
@@ -178,14 +192,16 @@ class GitlabMergeRequest:
 
 
 def validate_gitlab_header_event(request):
-    gitlab_header_event = request.META.get('HTTP_X_GITLAB_EVENT')
+    gitlab_header_event = request.META.get("HTTP_X_GITLAB_EVENT")
     if gitlab_header_event != "Merge Request Hook":
-        logger.error(f'Invalid x-gitlab-event hook detected, got {gitlab_header_event}')
-        raise exceptions.ValidationError("x-gitlab-event doesn't match merge request hook")
+        logger.error(f"Invalid x-gitlab-event hook detected, got {gitlab_header_event}")
+        raise exceptions.ValidationError(
+            "x-gitlab-event doesn't match merge request hook"
+        )
 
 
 def validate_gitlab_header_token(request, gl_mapping):
-    gitlab_header_token = request.META.get('HTTP_X_GITLAB_TOKEN')
+    gitlab_header_token = request.META.get("HTTP_X_GITLAB_TOKEN")
     if str(gl_mapping.webhook_secret) != gitlab_header_token:
         logger.error(f"Tokens mismatch")
         raise exceptions.ValidationError("Invalid x-gitlab-token, request malformed")
