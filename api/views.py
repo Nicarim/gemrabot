@@ -15,8 +15,9 @@ from api.destinations.interactions import add_project_to_channel, approve_mr_act
 from api.destinations.messages import get_config_empty_message, get_config_project_list, get_gl_authorization_empty, \
     get_gl_authorization_show
 from api.destinations.slack import SlackNotifier, slack_oauth_request
-from api.models import SlackUser, GitlabRepoChMapping, UserGitlabAccessToken, UserGitlabOAuthToken
-from api.sources.gitlab import GitlabWebhook
+from api.models import SlackUser, GitlabRepoChMapping, UserGitlabOAuthToken
+from api.sources.gitlab import GitlabWebhook, GitlabOAuthClient
+from api.utils import get_gitlab_redirect_uri
 from gemrabot.redirects import SlackRedirect
 
 logger = logging.getLogger(__name__)
@@ -57,18 +58,11 @@ def oauth_gitlab(request: Request):
     code = request.query_params.get('code')
     state = request.query_params.get('state')
     redirect_uri = request.build_absolute_uri(reverse('gitlab_oauth'))
-    response = requests.post(f'{settings.GITLAB_HOST}/oauth/token', {
-        'client_id': settings.GITLAB_APP_ID,
-        'client_secret': settings.GITLAB_APP_SECRET,
-        'code': code,
-        'grant_type': 'authorization_code',
-        'redirect_uri': redirect_uri,
-    })
-    response.raise_for_status()
-    response_json = response.json()
+    gitlab_oauth = GitlabOAuthClient.get_client()
+    response = gitlab_oauth.complete_auth(code, redirect_uri)
     gl_oauth_token = UserGitlabOAuthToken.objects.get(state_hash=state)
-    gl_oauth_token.gitlab_refresh_token = response_json['refresh_token']
-    gl_oauth_token.gitlab_access_token = response_json['access_token']
+    gl_oauth_token.gitlab_refresh_token = response['refresh_token']
+    gl_oauth_token.gitlab_access_token = response['access_token']
     gl_oauth_token.save()
     client = Gitlab(settings.GITLAB_HOST, oauth_token=gl_oauth_token.gitlab_access_token)
     try:
@@ -97,20 +91,16 @@ def slack_command(request: Request):
     else:
         response = get_config_project_list(gl_mappings)
     if len(gl_auth) <= 0:
-        redirect_uri = request.build_absolute_uri(reverse('gitlab_oauth'))
+        redirect_uri = get_gitlab_redirect_uri(request)
         gl_oauth_token, created = UserGitlabOAuthToken.objects.get_or_create(
             slack_owner_user=slack_user,
             slack_user_id=user_id,
             slack_team_id=team_id
         )
-        gl_oauth_url = f'{settings.GITLAB_HOST}/oauth/authorize' \
-                       f'?client_id={settings.GITLAB_APP_ID}' \
-                       f'&redirect_uri={redirect_uri}' \
-                       f'&response_type=code' \
-                       f'&state={gl_oauth_token.state_hash}' \
-                       f'&scope=api'
+        gitlab_oauth = GitlabOAuthClient.get_client()
+        oauth_url = gitlab_oauth.get_oauth_redirect_url(redirect_uri, gl_oauth_token.state_hash)
 
-        for block in get_gl_authorization_empty(gl_oauth_url)['blocks']:
+        for block in get_gl_authorization_empty(oauth_url)['blocks']:
             response['blocks'].append(block)
     else:
         for block in get_gl_authorization_show(gl_auth[0])['blocks']:
@@ -154,15 +144,8 @@ def slack_interactivity(request: Request):
                                                           slack_team_id=team_id,
                                                           slack_owner_user=slack_user).all()
             # call revoke authorization
-            response = requests.post(f'{settings.GITLAB_HOST}/oauth/revoke', {
-                'token': gl_auth[0].gitlab_access_token,
-                'client_id': settings.GITLAB_APP_ID,
-                'client_secret': settings.GITLAB_APP_SECRET,
-            }, headers={
-                'Authorization': f'Bearer {gl_auth[0].gitlab_access_token}'
-            })
-            # foolish are you - this endpoint always returns 200 so you cannot know if it was successful or not ;)
-            response.raise_for_status()
+            gitlab_oauth = GitlabOAuthClient.get_client()
+            gitlab_oauth.revoke_auth(gl_auth[0].gitlab_access_token)
             gl_auth[0].delete()
             return Response({})
     if payload['type'] == "view_submission":

@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+import requests
 from dateutil.parser import parse
 from django.conf import settings
 from gitlab import Gitlab
@@ -11,6 +12,45 @@ from unidiff import PatchSet, PatchedFile
 from api.data_models import PullRequest, PullRequestStatus, FileAction, PullRequestFile, PatchedFileRepr
 
 logger = logging.getLogger(__name__)
+
+
+class GitlabOAuthClient:
+    def __init__(self, host, client_id, client_secret):
+        self.host = host
+        self.client_id = client_id
+        self.client_secret = client_secret
+
+    @classmethod
+    def get_client(cls):
+        return cls(settings.GITLAB_HOST, settings.GITLAB_APP_ID, settings.GITLAB_APP_SECRET)
+
+    def get_oauth_redirect_url(self, redirect_uri, state, scope='api'):
+        return f'{self.host}/oauth/authorize' \
+               f'?client_id={self.client_id}' \
+               f'&redirect_uri={redirect_uri}' \
+               f'&response_type=code' \
+               f'&state={state}' \
+               f'&scope={scope}'
+
+    def revoke_auth(self, token):
+        response = requests.post(f'{self.host}/oauth/revoke', {
+            'token': token,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+        })
+        response.raise_for_status()
+        return response.json()
+
+    def complete_auth(self, code, redirect_uri):
+        response = requests.post(f'{self.host}/oauth/token', {
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri,
+        })
+        response.raise_for_status()
+        return response.json()
 
 
 class GitlabWebhook:

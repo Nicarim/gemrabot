@@ -1,3 +1,6 @@
+from rest_framework.reverse import reverse
+
+
 def td_format(td_object):
     seconds = int(td_object.total_seconds())
     periods = [
@@ -17,3 +20,7 @@ def td_format(td_object):
             strings.append("%s %s%s" % (period_value, period_name, has_s))
 
     return ", ".join(strings)
+
+
+def get_gitlab_redirect_uri(request):
+    return request.build_absolute_uri(reverse('gitlab_oauth'))
