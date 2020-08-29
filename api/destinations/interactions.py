@@ -78,7 +78,11 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
         result.update(v)
     channel_id = result['add_gitlab_channel_id']['selected_channel']
     project_id = result['add_gitlab_project_id']['value']
-    gl_client = Gitlab(settings.GITLAB_HOST, private_token=settings.GITLAB_API_KEY)
+    gl_oauth = UserGitlabOAuthToken.objects.get(slack_owner_user=slack_user,
+                                                slack_user_id=payload['user']['id'],
+                                                slack_team_id=payload['team']['id'])
+
+    gl_client = Gitlab(settings.GITLAB_HOST, oauth_token=gl_oauth.gitlab_access_token)
     try:
         gl_project = gl_client.projects.get(project_id)
     except GitlabGetError:
@@ -95,6 +99,7 @@ def view_submission_add_gl_project_to_ch_submit(slack_user, payload):
         channel_id=channel_id,
         repository_id=gl_project.id,
         repository_name=gl_project.name,
+        gitlab_oauth_token=gl_oauth,
     )
     return Response({
         "response_action": "clear",

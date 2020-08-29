@@ -12,13 +12,6 @@ class SlackUser(models.Model):
     access_token = models.CharField(max_length=255)
 
 
-class GitlabRepoChMapping(models.Model):
-    channel_id = models.CharField(max_length=255, db_index=True)
-    slack_user = models.ForeignKey(SlackUser, on_delete=models.CASCADE)
-    repository_id = models.IntegerField(db_index=True)
-    repository_name = models.CharField(max_length=255)
-
-
 class UserGitlabOAuthToken(models.Model):
     gitlab_user_id = models.IntegerField(default=None, null=True)
     gitlab_user_name = models.CharField(max_length=255, default=None, null=True)
@@ -29,6 +22,14 @@ class UserGitlabOAuthToken(models.Model):
     slack_owner_user = models.ForeignKey(SlackUser, on_delete=models.CASCADE)
     slack_user_id = models.CharField(max_length=255)
     slack_team_id = models.CharField(max_length=255)
+
+
+class GitlabRepoChMapping(models.Model):
+    channel_id = models.CharField(max_length=255, db_index=True)
+    slack_user = models.ForeignKey(SlackUser, on_delete=models.CASCADE)
+    repository_id = models.IntegerField(db_index=True)
+    repository_name = models.CharField(max_length=255)
+    gitlab_oauth_token = models.ForeignKey(UserGitlabOAuthToken, on_delete=models.CASCADE)
 
 
 class UserGitlabAccessToken(models.Model):
